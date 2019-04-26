@@ -60,7 +60,7 @@ class RMQ:
             # return ret.method.message_count
             return ret
 
-    def read_json(self, queue_name, n=-1, auto_ack=False, timeout_seconds=60):
+    def read_jsons(self, queue_name, n=-1, auto_ack=False, timeout_seconds=60):
         assert type(n) is int
 
         if n != 0:

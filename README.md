@@ -3,17 +3,19 @@
 *   simplify working with rabbitmq
 
 ##  rmq_controller.RMQ
-*   `rmq = RMQ(ip_address, port, virtual_host, username, password)`
+*   `rmq = RMQ(ip_address, port, virtual_host, username, password, name=None)`
+*   `str(rmq)`
 *   `RMQ.get_count(queue_name)`
 *   `RMQ.purge(queue_name)`
-*   `RMQ.read_json(queue_name, n=-1, auto_ack=False)`
+*   `RMQ.read_jsons(queue_name, n=-1, auto_ack=False)`
     *   if `n` < 0, reads *all* messages in queue
         *   otherwise, reads `n` messages from queue
     *   if `auto_ack` is set, acknowledges (and removes) messages from queue once read
 *   `RMQ.write_jsons(queue_name, json_iterator)`
 
 ##  ssh_controller.SSH
-*   `ssh = SSH(ip_address, port, username, password, logfile='ssh.log')`
+*   `ssh = SSH(ip_address, port, username, password, logfile='ssh.log', name=None)`
+*   `str(ssh)`
     *   if `logfile` is `None`, does not log output
 *   `ssh.execute(self, command, wait_for_output=True)`
     *   if `wait_for_output` is set, blocks until command has completed and returns output
