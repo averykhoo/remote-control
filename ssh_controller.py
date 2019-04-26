@@ -39,6 +39,10 @@ class SSH:
         self.logfile = logfile
         self.name = name
 
+    def __str__(self):
+        insert_name = f'[{self.name}]=' if self.name is not None else ''
+        return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}'
+
     def execute(self, command, wait_for_output=True):
         out = None
         err = None

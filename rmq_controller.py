@@ -40,6 +40,10 @@ class RMQ:
         self.password = password
         self.name = name
 
+    def __str__(self):
+        insert_name = f'[{self.name}]=' if self.name is not None else ''
+        return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}'
+
     def get_count(self, queue_name):
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
             rmq_queue = rmq_channel.queue_declare(queue=queue_name,
