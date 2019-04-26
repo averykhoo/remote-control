@@ -45,44 +45,73 @@ class RMQ:
         return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}'
 
     def get_count(self, queue_name):
-        with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-            rmq_queue = rmq_channel.queue_declare(queue=queue_name,
-                                                  durable=True,
-                                                  exclusive=False,
-                                                  auto_delete=False,
-                                                  passive=True)
-            return rmq_queue.method.message_count
+        if type(queue_name) is str:
+            queue_names = [queue_name]
+        else:
+            queue_names = queue_name
+
+        count = 0
+        for q_name in queue_names:
+            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
+                rmq_queue = rmq_channel.queue_declare(queue=q_name,
+                                                      durable=True,
+                                                      exclusive=False,
+                                                      auto_delete=False,
+                                                      passive=True)
+                count += rmq_queue.method.message_count
+
+        return count
 
     def purge(self, queue_name):
-        with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-            ret = rmq_channel.queue_purge(queue=queue_name)
-            # assert ret.method.NAME == 'Queue.PurgeOk'
-            # return ret.method.message_count
-            return ret
+        if type(queue_name) is str:
+            queue_names = [queue_name]
+        else:
+            queue_names = queue_name
+
+        out = []
+        for q_name in queue_names:
+            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
+                res = rmq_channel.queue_purge(queue=q_name)
+                # assert res.method.NAME == 'Queue.PurgeOk'
+                # return res.method.message_count
+                out.append(res)
+
+        return out
 
     def read_jsons(self, queue_name, n=-1, auto_ack=False, timeout_seconds=60):
         assert type(n) is int
 
-        if n != 0:
-            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-                for i, (method_frame, header_frame, body) in enumerate(
-                        rmq_channel.consume(queue=queue_name, inactivity_timeout=timeout_seconds)):
+        if type(queue_name) is str:
+            queue_names = [queue_name]
+        else:
+            queue_names = queue_name
+
+        for q_name in queue_names:
+            with RChannel(self.ip_address, self.port, self.virtual_host, self.username,
+                          self.password) as rmq_channel:
+                for method_frame, header_frame, body in rmq_channel.consume(queue=q_name,
+                                                                            inactivity_timeout=timeout_seconds):
+                    # finished reading messages
+                    if n == 0:
+                        break
+
+                    # skip blank
                     if body is None:
                         continue
 
+                    # decode to utf8
                     if type(body) is bytes:
                         body = body.decode('utf8')
 
+                    # json decode
                     yield json.loads(body)
 
+                    # ack message
                     if auto_ack and method_frame:
                         rmq_channel.basic_ack(method_frame.delivery_tag)
 
-                    if n < 0:
-                        continue
-
-                    if i + 1 >= n:
-                        break
+                    # count down until n==0
+                    n -= 1
 
                 # re-queue unacked messages, if any
                 rmq_channel.cancel()
