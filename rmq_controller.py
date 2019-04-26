@@ -78,43 +78,40 @@ class RMQ:
 
         return out
 
-    def read_jsons(self, queue_name, n=-1, auto_ack=False, timeout_seconds=60):
+    def read_jsons(self, queue_name, n=None, auto_ack=False, timeout_seconds=60):
+        if n is None:
+            n = self.get_count(queue_name)
+
         assert type(n) is int
 
-        if type(queue_name) is str:
-            queue_names = [queue_name]
-        else:
-            queue_names = queue_name
+        with RChannel(self.ip_address, self.port, self.virtual_host, self.username,
+                      self.password) as rmq_channel:
+            for method_frame, header_frame, body in rmq_channel.consume(queue=queue_name,
+                                                                        inactivity_timeout=timeout_seconds):
+                # finished reading messages
+                if n == 0:
+                    break
 
-        for q_name in queue_names:
-            with RChannel(self.ip_address, self.port, self.virtual_host, self.username,
-                          self.password) as rmq_channel:
-                for method_frame, header_frame, body in rmq_channel.consume(queue=q_name,
-                                                                            inactivity_timeout=timeout_seconds):
-                    # finished reading messages
-                    if n == 0:
-                        break
+                # rabbit mq way of saying there's nothing left (after timeout_seconds of the queue being empty)
+                if body is None:
+                    continue
 
-                    # skip blank
-                    if body is None:
-                        continue
+                # decode to utf8
+                if type(body) is bytes:
+                    body = body.decode('utf8')
 
-                    # decode to utf8
-                    if type(body) is bytes:
-                        body = body.decode('utf8')
+                # json decode
+                yield json.loads(body)
 
-                    # json decode
-                    yield json.loads(body)
+                # ack message
+                if auto_ack and method_frame:
+                    rmq_channel.basic_ack(method_frame.delivery_tag)
 
-                    # ack message
-                    if auto_ack and method_frame:
-                        rmq_channel.basic_ack(method_frame.delivery_tag)
+                # count down until n==0
+                n -= 1
 
-                    # count down until n==0
-                    n -= 1
-
-                # re-queue unacked messages, if any
-                rmq_channel.cancel()
+            # re-queue unacked messages, if any
+            rmq_channel.cancel()
 
     def write_jsons(self, queue_name, json_iterator):
         n_inserted = 0

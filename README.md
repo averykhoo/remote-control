@@ -34,3 +34,9 @@
 *   `ssh.tar_gz(remote_target, remote_output_path)`
 *   `ssh.scp_remote_to_local(remote_path, local_path, overwrite=False)`
 *   `ssh.scp_local_to_remote(local_path, remote_path, overwrite=False)`
+
+
+## to-do
+*   class verbose, method overwrite (default none)
+*   rename queue_name since it takes multiple queues
+*   update use of n in read_json
