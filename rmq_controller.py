@@ -78,7 +78,10 @@ class RMQ:
                     if auto_ack and method_frame:
                         rmq_channel.basic_ack(method_frame.delivery_tag)
 
-                    if n >= 0 and n <= i + 1:
+                    if n < 0:
+                        continue
+
+                    if i + 1 >= n:
                         break
 
                 # re-queue unacked messages, if any
