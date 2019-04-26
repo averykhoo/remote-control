@@ -56,27 +56,28 @@ class RMQ:
             return ret
 
     def read_json(self, queue_name, n=-1, auto_ack=False, timeout_seconds=60):
-        assert n != 0
+        assert type(n) is int
 
-        with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-            for i, (method_frame, header_frame, message) in enumerate(
-                    rmq_channel.consume(queue=queue_name, inactivity_timeout=timeout_seconds)):
-                if message is None:
-                    continue
+        if n != 0:
+            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
+                for i, (method_frame, header_frame, body) in enumerate(
+                        rmq_channel.consume(queue=queue_name, inactivity_timeout=timeout_seconds)):
+                    if body is None:
+                        continue
 
-                if type(message) is bytes:
-                    message = message.decode('utf8')
+                    if type(body) is bytes:
+                        body = body.decode('utf8')
 
-                yield json.loads(message)
+                    yield json.loads(body)
 
-                if auto_ack and method_frame:
-                    rmq_channel.basic_ack(method_frame.delivery_tag)
+                    if auto_ack and method_frame:
+                        rmq_channel.basic_ack(method_frame.delivery_tag)
 
-                if n >= 0 and n <= i + 1:
-                    break
+                    if n >= 0 and n <= i + 1:
+                        break
 
-            # re-queue unacked messages, if any
-            rmq_channel.cancel()
+                # re-queue unacked messages, if any
+                rmq_channel.cancel()
 
     def write_jsons(self, queue_name, json_iterator):
         n_inserted = 0

@@ -74,6 +74,9 @@ class SSH:
                 except:
                     print('could not decode stderr as utf8')
 
+            elif 'nohup' not in command:
+                print('usage of `nohup` recommended for long-running commands')
+
         # warn on error
         if err:
             warnings.warn(err)
@@ -86,28 +89,30 @@ class SSH:
         assert pid > 10  # don't kill the kernel pls
         self.execute(f'kill -9 {pid}')
 
-    def ps_ef(self, cmd_grep=None, kill_9=False):
+    def ps_ef(self, cmd_grep_pattern=None, kill_9=False):
         # get ps info
         headers = ['User', 'PID', 'Parent PID', 'CPU%', 'Start Time', 'TTY', 'Running Time', 'Command']
         lines = [line.split(maxsplit=7) for line in self.execute('ps -ef').split('\n')[1:] if line.strip()]
         df = pd.DataFrame(lines, columns=headers)
 
         # filter to desired rows
-        if cmd_grep:
-            df = df[df['Command'].str.contains(cmd_grep)]
+        if cmd_grep_pattern:
+            df = df[df['Command'].str.contains(cmd_grep_pattern)]
 
         # kill everything that matches the grep
         if kill_9:
-            assert cmd_grep
-            pids_to_kill = sorted(df['PID'].unique())
-            for i, pid in enumerate(pids_to_kill):
-                print(f'[{i+1}/{len(pids_to_kill)}] killing process with PID={pid}')
-                self.kill_pid(pid)
+            if cmd_grep_pattern:
+                pids_to_kill = sorted(df['PID'].unique())
+                for i, pid in enumerate(pids_to_kill):
+                    print(f'[{i+1}/{len(pids_to_kill)}] killing process with PID={pid}')
+                    self.kill_pid(pid)
+            else:
+                warnings.warn('not allowed to kill all processes, please specify a command grep pattern')
 
         return df
 
-    def process_running(self, process_name, cmd_grep):
-        return process_name in self.execute(f'ps -ef | grep {cmd_grep}')
+    def process_running(self, process_name, cmd_grep_pattern):
+        return process_name in self.execute(f'ps -ef | grep {cmd_grep_pattern}')
 
     def exists(self, remote_path):
         remote_path = str(remote_path)
