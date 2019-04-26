@@ -32,12 +32,13 @@ class RChannel:
 
 
 class RMQ:
-    def __init__(self, ip_address, port, virtual_host, username, password):
+    def __init__(self, ip_address, port, virtual_host, username, password, name=None):
         self.ip_address = ip_address
         self.port = port
         self.virtual_host = virtual_host
         self.username = username
         self.password = password
+        self.name = name
 
     def get_count(self, queue_name):
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:

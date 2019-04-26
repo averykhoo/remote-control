@@ -31,12 +31,13 @@ class SSHConnection:
 
 
 class SSH:
-    def __init__(self, ip_address, port, username, password, logfile='ssh.log'):
+    def __init__(self, ip_address, port, username, password, logfile='ssh.log', name=None):
         self.ip_address = ip_address
         self.port = port
         self.username = username
         self.password = password
         self.logfile = logfile
+        self.name = name
 
     def execute(self, command, wait_for_output=True):
         out = None
@@ -183,7 +184,7 @@ class SSH:
             self.mv(tmp_path, remote_output_path)
             return remote_output_path
 
-    def scp_remote_to_local(self, remote_path, local_path, overwrite=False):
+    def scp_remote_to_local(self, remote_path, local_path, overwrite=False, verbose=True):
         remote_path = str(remote_path)
         local_path = os.path.abspath(local_path)
 
@@ -208,11 +209,10 @@ class SSH:
             assert not os.path.exists(os.path.dirname(tmp_path))
             os.makedirs(os.path.dirname(tmp_path))
 
-        # verbose
-        print(f'retrieving: <{remote_path}>')
-        print(f'        to: <{local_path}>')
-
         # log
+        if verbose:
+            print(f'retrieving: <{remote_path}>')
+            print(f'        to: <{local_path}>')
         if self.logfile is not None:
             with open(self.logfile, mode='at', encoding='utf8') as f:
                 f.write(json.dumps({'ip_address':        self.ip_address,
@@ -239,7 +239,7 @@ class SSH:
             os.rename(tmp_path, local_path)
             return local_path
 
-    def scp_local_to_remote(self, local_path, remote_path, overwrite=False):
+    def scp_local_to_remote(self, local_path, remote_path, overwrite=False, verbose=True):
         remote_path = str(remote_path)
         local_path = os.path.abspath(local_path)
 
@@ -265,11 +265,10 @@ class SSH:
                 print(f'remote dir <{os.path.dirname(tmp_path)}> does not exist, creating...')
                 self.mkdir(os.path.dirname(tmp_path))
 
-        # verbose
-        print(f'transmitting: <{local_path}>')
-        print(f'          to: <{remote_path}>')
-
         # log
+        if verbose:
+            print(f'transmitting: <{local_path}>')
+            print(f'          to: <{remote_path}>')
         if self.logfile is not None:
             with open(self.logfile, mode='at', encoding='utf8') as f:
                 f.write(json.dumps({'ip_address':         self.ip_address,
