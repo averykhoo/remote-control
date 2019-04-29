@@ -7,12 +7,13 @@ import paramiko
 
 
 class SSHConnection:
-    def __init__(self, ip_address, port, username, password):
+    def __init__(self, ip_address, port, username, password, timeout=None):
         self.ip_address = ip_address
         self.port = port
         self.username = username
         self.password = password
         self.ssh_conn = None
+        self.timeout = timeout
 
     def __enter__(self):
         self.ssh_conn = paramiko.SSHClient()
@@ -21,7 +22,8 @@ class SSHConnection:
         self.ssh_conn.connect(hostname=self.ip_address,
                               port=self.port,
                               username=self.username,
-                              password=self.password)
+                              password=self.password,
+                              timeout=self.timeout)
         return self.ssh_conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -38,6 +40,13 @@ class SSH:
         self.password = password
         self.logfile = logfile
         self.name = name
+
+        try:
+            with SSHConnection(self.ip_address, self.port, self.username, self.password, timeout=30):
+                pass
+        except:
+            print('SSH connection test failed')
+            raise
 
     def __str__(self):
         insert_name = f'[{self.name}]=' if self.name is not None else ''
@@ -108,9 +117,12 @@ class SSH:
         if kill_9:
             if cmd_grep_pattern:
                 pids_to_kill = sorted(df['PID'].unique())
-                for i, pid in enumerate(pids_to_kill):
-                    print(f'[{i+1}/{len(pids_to_kill)}] killing process with PID={pid}')
-                    self.kill_pid(pid)
+                if all(pid > 10 for pid in pids_to_kill):
+                    for i, pid in enumerate(pids_to_kill):
+                        print(f'[{i+1}/{len(pids_to_kill)}] killing process with PID={pid}')
+                        self.kill_pid(pid)
+                else:
+                    warnings.warn('not allowed to kill pid <= 10')
             else:
                 warnings.warn('not allowed to kill all processes, please specify a command grep pattern')
 

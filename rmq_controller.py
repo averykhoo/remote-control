@@ -1,4 +1,5 @@
 import json
+import warnings
 
 import pika
 
@@ -40,6 +41,13 @@ class RMQ:
         self.password = password
         self.name = name
 
+        try:
+            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
+                assert rmq_channel.is_open
+        except:
+            print('RMQ connection test failed')
+            raise
+
     def __str__(self):
         insert_name = f'[{self.name}]=' if self.name is not None else ''
         return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}'
@@ -62,34 +70,34 @@ class RMQ:
 
         return count
 
-    def purge(self, queue_name):
-        if type(queue_name) is str:
-            queue_names = [queue_name]
-        else:
-            queue_names = queue_name
+    def purge(self, queue_name, verbose=True):
+        if verbose:
+            print(f'purging all messages in {queue_name} queue')
 
-        out = []
-        for q_name in queue_names:
-            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-                res = rmq_channel.queue_purge(queue=q_name)
-                # assert res.method.NAME == 'Queue.PurgeOk'
-                # return res.method.message_count
-                out.append(res)
+        with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
+            res = rmq_channel.queue_purge(queue=queue_name)
+            assert res.method.NAME == 'Queue.PurgeOk'
+            return res.method.message_count
 
-        return out
+    def read_jsons(self, queue_name, n=None, auto_ack=False, timeout_seconds=60, verbose=True):
+        # how many to read from mq
+        _num_to_read = self.get_count(queue_name)
+        if n is not None:
+            if verbose:
+                print(f'reading {n} messages from <{queue_name}> queue (total {_num_to_read}); auto_ack={auto_ack}')
+            if n > _num_to_read:
+                warnings.warn(f'n > queue length, this method blocks until n messages have been read')
+            _num_to_read = n
+        elif verbose:
+            print(f'reading all messages from <{queue_name}> queue (total {_num_to_read}); auto_ack={auto_ack}')
+        assert type(_num_to_read) is int
 
-    def read_jsons(self, queue_name, n=None, auto_ack=False, timeout_seconds=60):
-        if n is None:
-            n = self.get_count(queue_name)
-
-        assert type(n) is int
-
-        with RChannel(self.ip_address, self.port, self.virtual_host, self.username,
-                      self.password) as rmq_channel:
+        # start reading
+        with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
             for method_frame, header_frame, body in rmq_channel.consume(queue=queue_name,
                                                                         inactivity_timeout=timeout_seconds):
                 # finished reading messages
-                if n == 0:
+                if _num_to_read == 0:
                     break
 
                 # rabbit mq way of saying there's nothing left (after timeout_seconds of the queue being empty)
@@ -108,7 +116,7 @@ class RMQ:
                     rmq_channel.basic_ack(method_frame.delivery_tag)
 
                 # count down until n==0
-                n -= 1
+                _num_to_read -= 1
 
             # re-queue unacked messages, if any
             rmq_channel.cancel()
