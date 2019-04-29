@@ -1,7 +1,34 @@
 import json
+import math
+import time
 import warnings
 
 import pika
+
+
+def format_seconds(num):
+    """
+    string formatting
+    note that the days in a month is kinda fuzzy
+    :type num: int | float
+    """
+    num = abs(num)
+    if num == 0:
+        return u'0 seconds'
+    elif num == 1:
+        return u'1 second'
+
+    if num < 1:
+        # display 2 significant figures worth of decimals
+        return (u'%%0.%df seconds' % (1 - int(math.floor(math.log10(abs(num)))))) % num
+
+    unit = 0
+    denominators = [60.0, 60.0, 24.0, 7.0, 365.25 / 84.0, 12.0]
+    while unit < 6 and num > denominators[unit] * 0.9:
+        num /= denominators[unit]
+        unit += 1
+    unit = [u'seconds', u'minutes', u'hours', u'days', u'weeks', u'months', u'years'][unit]
+    return (u'%.2f %s' if num % 1 else u'%d %s') % (num, unit[:-1] if num == 1 else unit)
 
 
 class RChannel:
@@ -50,18 +77,16 @@ class RMQ:
 
     def __str__(self):
         insert_name = f'[{self.name}]=' if self.name is not None else ''
-        return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}'
+        return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}>'
 
-    def get_count(self, queue_name):
-        if type(queue_name) is str:
-            queue_names = [queue_name]
-        else:
-            queue_names = queue_name
+    def get_count(self, queue_names):
+        if type(queue_names) is str:
+            queue_names = [queue_names]
 
         count = 0
-        for q_name in queue_names:
-            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-                rmq_queue = rmq_channel.queue_declare(queue=q_name,
+        with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
+            for queue_name in queue_names:
+                rmq_queue = rmq_channel.queue_declare(queue=queue_name,
                                                       durable=True,
                                                       exclusive=False,
                                                       auto_delete=False,
@@ -134,3 +159,43 @@ class RMQ:
                 n_inserted += 1
 
         return n_inserted
+
+    def wait_until_queues_ready(self, queue_names, target_value=0, verbose=True, sleep_seconds=30):
+        assert target_value >= 0
+        assert type(target_value) is int
+
+        t_start = time.time()
+        r_e = 'ready' if target_value else 'empty'
+
+        if type(queue_names) is str:
+            queue_names = [queue_names]
+
+        insert_name = f'<{",".join(queue_names)}>'
+
+        item_count = self.get_count(queue_names)
+        while item_count != target_value:
+            if verbose:
+                print(f'waiting for {insert_name} to be {r_e}...'
+                      f'(elapsed {format_seconds(time.time() - t_start)}, len={item_count})')
+
+            time.sleep(sleep_seconds)
+
+    def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
+        t = time.time()
+
+        if type(queue_names) is str:
+            queue_names = [queue_names]
+
+        insert_name = f'<{",".join(queue_names)}>'
+
+        prev_count = -1
+        curr_count = self.get_count(queue_names)
+        while prev_count != curr_count:
+            if verbose:
+                print(f'waiting for {insert_name} to stabilize... '
+                      f'(elapsed {format_seconds(time.time() - t)}, len={curr_count})')
+            time.sleep(sleep_seconds)
+            prev_count = curr_count
+            curr_count = self.get_count(queue_names)
+
+        return curr_count
