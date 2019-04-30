@@ -108,6 +108,9 @@ class SSH:
         headers = ['User', 'PID', 'Parent PID', 'CPU%', 'Start Time', 'TTY', 'Running Time', 'Command']
         lines = [line.split(maxsplit=7) for line in self.execute('ps -ef').split('\n')[1:] if line.strip()]
         df = pd.DataFrame(lines, columns=headers)
+        df['PID'] = df['PID'].apply(lambda pid: int(pid))
+        df['Parent PID'] = df['Parent PID'].apply(lambda pid: int(pid))
+        df['CPU%'] = df['CPU%'].apply(lambda c: int(c))
 
         # filter to desired rows
         if cmd_grep_pattern:

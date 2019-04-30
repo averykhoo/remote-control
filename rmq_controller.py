@@ -173,12 +173,23 @@ class RMQ:
         insert_name = f'<{",".join(queue_names)}>'
 
         item_count = self.get_count(queue_names)
+        deltas = []
+        eta = None
         while item_count != target_value:
             if verbose:
-                print(f'waiting for {insert_name} to be {r_e}...'
-                      f'(elapsed {format_seconds(time.time() - t_start)}, len={item_count})')
+                print(f'waiting for {insert_name} to be {r_e}...' +
+                      f' (elapsed {format_seconds(time.time() - t_start)}, len={item_count})' +
+                      f' (remaining {format_seconds(eta)}' if eta is not None else '')
 
             time.sleep(sleep_seconds)
+
+            prev_count = item_count
+            item_count = self.get_count(queue_names)
+            deltas.append(prev_count - item_count)
+            if sum(deltas[-3:]):
+                eta = sleep_seconds * (item_count - target_value) / (sum(deltas[-3:]) / len(deltas[-3:]))
+            else:
+                eta = 999 * 365.25 * 24 * 60 * 60  # 999 years
 
     def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
         t = time.time()
