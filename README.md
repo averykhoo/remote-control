@@ -20,7 +20,7 @@
 *   `ssh.execute(self, command, wait_for_output=True)`
     *   if `wait_for_output` is set, blocks until command has completed and returns output
         *   otherwise, returns immediately
-*   `ssh.kill_pid(pid)`
+*   `ssh.kill(pid)`
 *   `ssh.ps_ef(cmd_grep=None, kill_9=False)`
     *   if `cmd_grep_pattern` is provided, lists only rows matching the grep pattern
         *   otherwise, returns *all* rows (often more than 1k)

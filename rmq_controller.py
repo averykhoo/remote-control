@@ -1,8 +1,8 @@
 import json
-import math
 import time
 import warnings
 
+import math
 import pika
 
 
@@ -32,8 +32,8 @@ def format_seconds(num):
 
 
 class RChannel:
-    rmq_channel: pika.adapters.blocking_connection.BlockingChannel
-    rmq_conn: pika.BlockingConnection
+    rmq_channel: [pika.adapters.blocking_connection.BlockingChannel, None]
+    rmq_conn: [pika.BlockingConnection, None]
 
     def __init__(self, ip_address, port, virtual_host, username, password):
         self.parameters = pika.ConnectionParameters(host=ip_address,
@@ -80,6 +80,7 @@ class RMQ:
         return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}>'
 
     def get_count(self, queue_names):
+
         if type(queue_names) is str:
             queue_names = [queue_names]
 
@@ -95,14 +96,24 @@ class RMQ:
 
         return count
 
-    def purge(self, queue_name, verbose=True):
-        if verbose:
-            print(f'purging all messages in {queue_name} queue')
+    def purge(self, queue_names, verbose=True):
 
+        if type(queue_names) is str:
+            queue_names = [queue_names]
+
+        insert_name = f'<{",".join(queue_names)}>'
+
+        if verbose:
+            print(f'purging all messages from {insert_name}')
+
+        removed_count = 0
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-            res = rmq_channel.queue_purge(queue=queue_name)
-            assert res.method.NAME == 'Queue.PurgeOk'
-            return res.method.message_count
+            for queue_name in queue_names:
+                res = rmq_channel.queue_purge(queue=queue_name)
+                assert res.method.NAME == 'Queue.PurgeOk'
+                removed_count += res.method.message_count
+
+        return removed_count
 
     def read_jsons(self, queue_name, n=None, auto_ack=False, timeout_seconds=60, verbose=True):
         # how many to read from mq
@@ -163,6 +174,7 @@ class RMQ:
     def wait_until_queues_ready(self, queue_names, target_value=0, verbose=True, sleep_seconds=30):
         assert target_value >= 0
         assert type(target_value) is int
+        num_avg = 5
 
         t_start = time.time()
         r_e = 'ready' if target_value else 'empty'
@@ -179,7 +191,7 @@ class RMQ:
             if verbose:
                 print(f'waiting for {insert_name} to be {r_e}...' +
                       f' (elapsed {format_seconds(time.time() - t_start)}, len={item_count})' +
-                      f' (remaining {format_seconds(eta)}' if eta is not None else '')
+                      f' (remaining {format_seconds(eta)})' if eta is not None else '')
 
             time.sleep(sleep_seconds)
 
@@ -187,7 +199,7 @@ class RMQ:
             item_count = self.get_count(queue_names)
             deltas.append(prev_count - item_count)
             if sum(deltas[-3:]):
-                eta = sleep_seconds * (item_count - target_value) / (sum(deltas[-3:]) / len(deltas[-3:]))
+                eta = sleep_seconds * (item_count - target_value) / (sum(deltas[-num_avg:]) / len(deltas[-num_avg:]))
             else:
                 eta = 999 * 365.25 * 24 * 60 * 60  # 999 years
 

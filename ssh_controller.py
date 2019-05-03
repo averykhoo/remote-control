@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import warnings
@@ -7,6 +8,7 @@ import paramiko
 
 
 class SSHConnection:
+
     def __init__(self, ip_address, port, username, password, timeout=None):
         self.ip_address = ip_address
         self.port = port
@@ -40,6 +42,7 @@ class SSH:
         self.password = password
         self.logfile = logfile
         self.name = name
+        self.log_separator = '--'
 
         try:
             with SSHConnection(self.ip_address, self.port, self.username, self.password, timeout=30):
@@ -63,7 +66,10 @@ class SSH:
                                     'port':       self.port,
                                     'username':   self.username,
                                     'command':    command,
-                                    }))
+                                    'timestamp':  datetime.datetime.now().isoformat(),
+                                    }) + '\n')
+                if self.log_separator:
+                    f.write(self.log_separator + '\n')
 
         # run command and (maybe) get output
         with SSHConnection(self.ip_address, self.port, self.username, self.password) as ssh_conn:
@@ -98,14 +104,20 @@ class SSH:
         # return output
         return out
 
-    def kill_pid(self, pid):
+    def kill(self, pid: int):
         pid = int(pid)
         assert pid > 10  # don't kill the kernel pls
         self.execute(f'kill -9 {pid}')
 
-    def ps_ef(self, cmd_grep_pattern=None, kill_9=False):
-        # get ps info
+    def ps_ef(self, cmd_grep_patterns=None, kill=False):
         headers = ['User', 'PID', 'Parent PID', 'CPU%', 'Start Time', 'TTY', 'Running Time', 'Command']
+
+        if cmd_grep_patterns is None:
+            cmd_grep_patterns = []
+        elif type(cmd_grep_patterns) is str:
+            cmd_grep_patterns = [cmd_grep_patterns]
+
+        # get ps info
         lines = [line.split(maxsplit=7) for line in self.execute('ps -ef').split('\n')[1:] if line.strip()]
         df = pd.DataFrame(lines, columns=headers)
         df['PID'] = df['PID'].apply(lambda pid: int(pid))
@@ -113,26 +125,48 @@ class SSH:
         df['CPU%'] = df['CPU%'].apply(lambda c: int(c))
 
         # filter to desired rows
-        if cmd_grep_pattern:
-            df = df[df['Command'].str.contains(cmd_grep_pattern)]
+        for pattern in cmd_grep_patterns:
+            df = df[df['Command'].str.contains(pattern)]
 
-        # kill everything that matches the grep
-        if kill_9:
-            if cmd_grep_pattern:
-                pids_to_kill = sorted(df['PID'].unique())
-                if all(pid > 10 for pid in pids_to_kill):
-                    for i, pid in enumerate(pids_to_kill):
-                        print(f'[{i+1}/{len(pids_to_kill)}] killing process with PID={pid}')
-                        self.kill_pid(pid)
-                else:
-                    warnings.warn('not allowed to kill pid <= 10')
-            else:
-                warnings.warn('not allowed to kill all processes, please specify a command grep pattern')
+        # nothing to kill
+        if not kill:
+            return df
 
+        # not filtered, so don't kill
+        if not cmd_grep_patterns:
+            warnings.warn('not allowed to kill all processes, please specify a command grep pattern')
+            return df
+
+        # what to kill
+        pids_to_kill = sorted(df['PID'].unique())
+
+        # invalid kill target
+        if any(pid <= 10 for pid in pids_to_kill):
+            warnings.warn('not allowed to kill pid <= 10')
+            return df
+
+        # kill the things
+        for i, pid in enumerate(pids_to_kill):
+            print(f'[{i + 1}/{len(pids_to_kill)}] killing process with PID={pid}')
+            self.kill(pid)
+
+        # done
         return df
 
-    def process_running(self, process_name, cmd_grep_pattern):
-        return process_name in self.execute(f'ps -ef | grep {cmd_grep_pattern}')
+    def process_running(self, process_name, cmd_grep_patterns, case=True):
+        if cmd_grep_patterns is None:
+            cmd_grep_patterns = []
+        elif type(cmd_grep_patterns) is str:
+            cmd_grep_patterns = [cmd_grep_patterns]
+
+        cmd = 'ps -ef'
+        for pattern in cmd_grep_patterns:
+            if case:
+                cmd += f' | grep "{pattern}"'
+            else:
+                cmd += f' | grep -i "{pattern}"'
+
+        return process_name in self.execute(cmd)
 
     def exists(self, remote_path):
         remote_path = str(remote_path)
@@ -142,11 +176,14 @@ class SSH:
             return True
         return False
 
-    def mkdir(self, remote_path):
+    def mkdir(self, remote_path, parents=True):
         remote_path = str(remote_path)
-        assert remote_path.startswith('/')
+        assert remote_path.startswith('/'), 'remote path must be absolute'
 
-        return self.execute(f'mkdir --parents "{remote_path}"')
+        if parents:
+            return self.execute(f'mkdir --parents "{remote_path}"')
+        else:
+            return self.execute(f'mkdir "{remote_path}"')
 
     def mv(self, remote_path, new_remote_path):
         remote_path = str(remote_path)
@@ -239,7 +276,10 @@ class SSH:
                                     'username':          self.username,
                                     'remote_source':     remote_path,
                                     'local_destination': local_path,
-                                    }))
+                                    'timestamp':         datetime.datetime.now().isoformat(),
+                                    }) + '\n')
+                if self.log_separator:
+                    f.write(self.log_separator + '\n')
 
         # scp to temp path
         with SSHConnection(self.ip_address, self.port, self.username, self.password) as ssh_conn:
@@ -295,7 +335,10 @@ class SSH:
                                     'username':           self.username,
                                     'local_source':       local_path,
                                     'remote_destination': remote_path,
-                                    }))
+                                    'timestamp':          datetime.datetime.now().isoformat(),
+                                    }) + '\n')
+                if self.log_separator:
+                    f.write(self.log_separator + '\n')
 
         # scp to temp path
         with SSHConnection(self.ip_address, self.port, self.username, self.password) as ssh_conn:

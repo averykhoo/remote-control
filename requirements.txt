@@ -1,4 +1,5 @@
 bcrypt
+pandas
 paramiko
 pika
 pyasn1
