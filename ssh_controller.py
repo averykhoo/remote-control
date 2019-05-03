@@ -153,7 +153,7 @@ class SSH:
         # done
         return df
 
-    def process_running(self, process_name, cmd_grep_patterns, case=True):
+    def process_running(self, process_name, cmd_grep_patterns, grep_case=True):
         if cmd_grep_patterns is None:
             cmd_grep_patterns = []
         elif type(cmd_grep_patterns) is str:
@@ -161,7 +161,7 @@ class SSH:
 
         cmd = 'ps -ef'
         for pattern in cmd_grep_patterns:
-            if case:
+            if grep_case:
                 cmd += f' | grep "{pattern}"'
             else:
                 cmd += f' | grep -i "{pattern}"'
