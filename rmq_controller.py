@@ -128,12 +128,11 @@ class RMQ:
 
         if type(queue_names) is str:
             queue_names = [queue_names]
+        insert_name = f'<{",".join(queue_names)}>'
 
         self._log({'function':    'purge',
                    'queue_names': queue_names,
                    })
-
-        insert_name = f'<{",".join(queue_names)}>'
 
         if verbose:
             print(f'purging all messages from {insert_name}')
@@ -150,14 +149,17 @@ class RMQ:
     def read_jsons(self, queue_name, n=None, auto_ack=False, timeout_seconds=60, verbose=True):
         # how many to read from mq
         _num_to_read = self.get_count(queue_name)
+
         if n is not None:
             if verbose:
                 print(f'reading {n} messages from <{queue_name}> queue (total {_num_to_read}); auto_ack={auto_ack}')
             if n > _num_to_read:
                 warnings.warn(f'n > queue length, this method blocks until n messages have been read')
             _num_to_read = n
+
         elif verbose:
             print(f'reading all messages from <{queue_name}> queue (total {_num_to_read}); auto_ack={auto_ack}')
+
         assert type(_num_to_read) is int
 
         self._log({'function':     'read_jsons',
@@ -216,29 +218,28 @@ class RMQ:
     def wait_until_queues_ready(self, queue_names, target_value=0, verbose=True, sleep_seconds=30):
         assert target_value >= 0
         assert type(target_value) is int
-        num_avg = 10
 
-        t_start = time.time()
-        r_e = 'ready' if target_value else 'empty'
+        _num_avg = 10
+        _eta_max = 999 * 365.25 * 24 * 60 * 60  # 999 years
+        _ready_empty = 'ready' if target_value else 'empty'
+        _time_start = time.time()
 
         if type(queue_names) is str:
             queue_names = [queue_names]
+        insert_name = f'<{",".join(queue_names)}>'
 
         self._log({'function':     'wait_until_queues_ready',
                    'queue_names':  queue_names,
                    'target_value': target_value,
                    })
 
-        insert_name = f'<{",".join(queue_names)}>'
-
         item_count = self.get_count(queue_names)
         counts = [item_count]
         times = [time.time()]
         if verbose:
-            print(f'waiting for {insert_name} to be {r_e}...' +
-                  f' (elapsed {format_seconds(time.time() - t_start)}, len={item_count})')
+            print(f'waiting for {insert_name} to be {_ready_empty}...' +
+                  f' (elapsed {format_seconds(time.time() - _time_start)}, len={item_count})')
 
-        eta = None
         while item_count != target_value:
 
             # wait a while
@@ -250,40 +251,40 @@ class RMQ:
             times.append(time.time())
 
             # calculate difference
-            delta_time = times[-num_avg:][0] - times[-1]
-            delta_count = counts[-num_avg:][0] - counts[-1]
+            delta_time = times[-_num_avg:][0] - times[-1]
+            delta_count = counts[-_num_avg:][0] - counts[-1]
 
             # don't divide by zero
             if delta_count != 0:
                 eta = item_count * (delta_time / delta_count)
             else:
-                eta = 999 * 365.25 * 24 * 60 * 60  # 999 years
+                eta = _eta_max
+            eta = min(eta, _eta_max)
 
             # print estimate time remaining
             if verbose:
-                print(f'waiting for {insert_name} to be {r_e}...' +
-                      f' (elapsed {format_seconds(time.time() - t_start)},' +
+                print(f'waiting for {insert_name} to be {_ready_empty}...' +
+                      f' (elapsed {format_seconds(time.time() - _time_start)},' +
                       f' len={item_count},' +
                       f' remaining {format_seconds(eta)})')
 
     def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
-        t = time.time()
+        _time_start = time.time()
 
         if type(queue_names) is str:
             queue_names = [queue_names]
+        insert_name = f'<{",".join(queue_names)}>'
 
         self._log({'function':    'wait_until_queues_stabilized',
                    'queue_names': queue_names,
                    })
-
-        insert_name = f'<{",".join(queue_names)}>'
 
         prev_count = -1
         curr_count = self.get_count(queue_names)
         while prev_count != curr_count:
             if verbose:
                 print(f'waiting for {insert_name} to stabilize... '
-                      f'(elapsed {format_seconds(time.time() - t)}, len={curr_count})')
+                      f'(elapsed {format_seconds(time.time() - _time_start)}, len={curr_count})')
             time.sleep(sleep_seconds)
             prev_count = curr_count
             curr_count = self.get_count(queue_names)
