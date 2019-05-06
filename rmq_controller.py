@@ -1,3 +1,4 @@
+import datetime
 import json
 import time
 import warnings
@@ -60,13 +61,15 @@ class RChannel:
 
 
 class RMQ:
-    def __init__(self, ip_address, port, virtual_host, username, password, name=None):
+    def __init__(self, ip_address, port, virtual_host, username, password, logfile='rmq.log', name=None):
         self.ip_address = ip_address
         self.port = port
         self.virtual_host = virtual_host
         self.username = username
         self.password = password
+        self.logfile = logfile
         self.name = name
+        self.log_separator = '--'  # compatible with jdump files
 
         try:
             with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
@@ -79,10 +82,26 @@ class RMQ:
         insert_name = f'[{self.name}]=' if self.name is not None else ''
         return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}>'
 
+    def _log(self, json_data):
+        if self.logfile is not None:
+            with open(self.logfile, mode='at', encoding='utf8', newline='\n') as f:
+                f.write(json.dumps(json_data, indent=4, sort_keys=True, ensure_ascii=False) + '\n')
+                if self.log_separator:
+                    f.write(self.log_separator + '\n')
+
     def get_count(self, queue_names):
 
         if type(queue_names) is str:
             queue_names = [queue_names]
+
+        self._log({'function':     'get_count',
+                   'ip_address':   self.ip_address,
+                   'port':         self.port,
+                   'virtual_host': self.virtual_host,
+                   'username':     self.username,
+                   'queue_names':  queue_names,
+                   'timestamp':    datetime.datetime.now().isoformat(),
+                   })
 
         count = 0
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
@@ -100,6 +119,15 @@ class RMQ:
 
         if type(queue_names) is str:
             queue_names = [queue_names]
+
+        self._log({'function':     'purge',
+                   'ip_address':   self.ip_address,
+                   'port':         self.port,
+                   'virtual_host': self.virtual_host,
+                   'username':     self.username,
+                   'queue_names':  queue_names,
+                   'timestamp':    datetime.datetime.now().isoformat(),
+                   })
 
         insert_name = f'<{",".join(queue_names)}>'
 
@@ -127,6 +155,16 @@ class RMQ:
         elif verbose:
             print(f'reading all messages from <{queue_name}> queue (total {_num_to_read}); auto_ack={auto_ack}')
         assert type(_num_to_read) is int
+
+        self._log({'function':     'read_jsons',
+                   'ip_address':   self.ip_address,
+                   'port':         self.port,
+                   'virtual_host': self.virtual_host,
+                   'username':     self.username,
+                   'queue_names':  queue_name,
+                   '_num_to_read': _num_to_read,
+                   'timestamp':    datetime.datetime.now().isoformat(),
+                   })
 
         # start reading
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
@@ -158,6 +196,16 @@ class RMQ:
             rmq_channel.cancel()
 
     def write_jsons(self, queue_name, json_iterator):
+
+        self._log({'function':     'write_jsons',
+                   'ip_address':   self.ip_address,
+                   'port':         self.port,
+                   'virtual_host': self.virtual_host,
+                   'username':     self.username,
+                   'queue_names':  queue_name,
+                   'timestamp':    datetime.datetime.now().isoformat(),
+                   })
+
         n_inserted = 0
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
             for json_obj in json_iterator:
@@ -181,6 +229,16 @@ class RMQ:
 
         if type(queue_names) is str:
             queue_names = [queue_names]
+
+        self._log({'function':     'wait_until_queues_ready',
+                   'ip_address':   self.ip_address,
+                   'port':         self.port,
+                   'virtual_host': self.virtual_host,
+                   'username':     self.username,
+                   'queue_names':  queue_names,
+                   'target_value': target_value,
+                   'timestamp':    datetime.datetime.now().isoformat(),
+                   })
 
         insert_name = f'<{",".join(queue_names)}>'
 
@@ -208,6 +266,15 @@ class RMQ:
 
         if type(queue_names) is str:
             queue_names = [queue_names]
+
+        self._log({'function':     'wait_until_queues_stabilized',
+                   'ip_address':   self.ip_address,
+                   'port':         self.port,
+                   'virtual_host': self.virtual_host,
+                   'username':     self.username,
+                   'queue_names':  queue_names,
+                   'timestamp':    datetime.datetime.now().isoformat(),
+                   })
 
         insert_name = f'<{",".join(queue_names)}>'
 
