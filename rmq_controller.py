@@ -161,7 +161,7 @@ class RMQ:
         assert type(_num_to_read) is int
 
         self._log({'function':     'read_jsons',
-                   'queue_name':  queue_name,
+                   'queue_name':   queue_name,
                    '_num_to_read': _num_to_read,
                    })
 
@@ -196,7 +196,7 @@ class RMQ:
 
     def write_jsons(self, queue_name, json_iterator):
 
-        self._log({'function':    'write_jsons',
+        self._log({'function':   'write_jsons',
                    'queue_name': queue_name,
                    })
 
@@ -232,23 +232,39 @@ class RMQ:
         insert_name = f'<{",".join(queue_names)}>'
 
         item_count = self.get_count(queue_names)
-        deltas = []
+        counts = [item_count]
+        times = [time.time()]
+        if verbose:
+            print(f'waiting for {insert_name} to be {r_e}...' +
+                  f' (elapsed {format_seconds(time.time() - t_start)}, len={item_count})')
+
         eta = None
         while item_count != target_value:
-            if verbose:
-                print(f'waiting for {insert_name} to be {r_e}...' +
-                      f' (elapsed {format_seconds(time.time() - t_start)}, len={item_count})' +
-                      f' (remaining {format_seconds(eta)})' if eta is not None else '')
 
+            # wait a while
             time.sleep(sleep_seconds)
 
-            prev_count = item_count
+            # check count again
             item_count = self.get_count(queue_names)
-            deltas.append(prev_count - item_count)
-            if sum(deltas[-3:]):
-                eta = sleep_seconds * (item_count - target_value) / (sum(deltas[-num_avg:]) / len(deltas[-num_avg:]))
+            counts.append(item_count)
+            times.append(time.time())
+
+            # calculate difference
+            delta_time = times[-num_avg:][0] - times[-1]
+            delta_count = counts[-num_avg:][0] - counts[-1]
+
+            # don't divide by zero
+            if delta_count != 0:
+                eta = item_count * (delta_time / delta_count)
             else:
                 eta = 999 * 365.25 * 24 * 60 * 60  # 999 years
+
+            # print estimate time remaining
+            if verbose:
+                print(f'waiting for {insert_name} to be {r_e}...' +
+                      f' (elapsed {format_seconds(time.time() - t_start)},' +
+                      f' len={item_count},' +
+                      f' remaining {format_seconds(eta)})')
 
     def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
         t = time.time()
