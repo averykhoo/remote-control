@@ -174,7 +174,7 @@ class RMQ:
     def wait_until_queues_ready(self, queue_names, target_value=0, verbose=True, sleep_seconds=30):
         assert target_value >= 0
         assert type(target_value) is int
-        num_avg = 5
+        num_avg = 10
 
         t_start = time.time()
         r_e = 'ready' if target_value else 'empty'
