@@ -55,8 +55,10 @@ class SSH:
         self._log({'function': 'init'})
 
     def __str__(self):
-        insert_name = f'[{self.name}]=' if self.name is not None else ''
-        return f'SSH<{insert_name}{self.username}@{self.ip_address}:{self.port}>'
+        if self.name is None:
+            return f'SSH<{self.username}@{self.ip_address}:{self.port}>'
+        else:
+            return f'SSH<[{self.name}]={self.username}@{self.ip_address}:{self.port}>'
 
     def _log(self, json_data):
 

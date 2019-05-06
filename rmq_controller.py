@@ -81,8 +81,10 @@ class RMQ:
         self._log({'function': 'init'})
 
     def __str__(self):
-        insert_name = f'[{self.name}]=' if self.name is not None else ''
-        return f'RMQ<{insert_name}{self.username}@{self.ip_address}:{self.port}>'
+        if self.name is None:
+            return f'RMQ<{self.username}@{self.ip_address}:{self.port}/{self.virtual_host}>'
+        else:
+            return f'RMQ<[{self.name}]={self.username}@{self.ip_address}:{self.port}/{self.virtual_host}>'
 
     def _log(self, json_data):
 
@@ -128,14 +130,13 @@ class RMQ:
 
         if type(queue_names) is str:
             queue_names = [queue_names]
-        insert_name = f'<{",".join(queue_names)}>'
 
         self._log({'function':    'purge',
                    'queue_names': queue_names,
                    })
 
         if verbose:
-            print(f'purging all messages from {insert_name}')
+            print(f'purging all messages from <{",".join(queue_names)}>')
 
         removed_count = 0
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
@@ -168,9 +169,11 @@ class RMQ:
                 print(f'peeking at messages in <{queue_name}> (total {_num_to_read})')
 
         assert type(_num_to_read) is int
+        assert _num_to_read >= 0
 
         self._log({'function':     'read_jsons',
                    'queue_name':   queue_name,
+                   'n':            n,
                    '_num_to_read': _num_to_read,
                    })
 
@@ -233,7 +236,6 @@ class RMQ:
 
         if type(queue_names) is str:
             queue_names = [queue_names]
-        insert_name = f'<{",".join(queue_names)}>'
 
         self._log({'function':     'wait_until_queues_ready',
                    'queue_names':  queue_names,
@@ -244,7 +246,7 @@ class RMQ:
         counts = [item_count]
         times = [time.time()]
         if verbose:
-            print(f'waiting for {insert_name} to be {_ready_empty}...'
+            print(f'waiting for <{",".join(queue_names)}> to be {_ready_empty}...'
                   f' (elapsed {format_seconds(time.time() - _time_start)},'
                   f' len={item_count})')
 
@@ -271,7 +273,7 @@ class RMQ:
 
             # print estimate time remaining
             if verbose:
-                print(f'waiting for {insert_name} to be {_ready_empty}...'
+                print(f'waiting for <{",".join(queue_names)}> to be {_ready_empty}...'
                       f' (elapsed {format_seconds(time.time() - _time_start)},'
                       f' len={item_count},'
                       f' remaining {format_seconds(eta)})')
@@ -281,7 +283,6 @@ class RMQ:
 
         if type(queue_names) is str:
             queue_names = [queue_names]
-        insert_name = f'<{",".join(queue_names)}>'
 
         self._log({'function':    'wait_until_queues_stabilized',
                    'queue_names': queue_names,
@@ -291,7 +292,7 @@ class RMQ:
         curr_count = self.get_count(queue_names)
         while prev_count != curr_count:
             if verbose:
-                print(f'waiting for {insert_name} to stabilize... '
+                print(f'waiting for <{",".join(queue_names)}> to stabilize... '
                       f'(elapsed {format_seconds(time.time() - _time_start)}, len={curr_count})')
             time.sleep(sleep_seconds)
             prev_count = curr_count
