@@ -152,13 +152,20 @@ class RMQ:
 
         if n is not None:
             if verbose:
-                print(f'reading {n} messages from <{queue_name}> queue (total {_num_to_read}); auto_ack={auto_ack}')
+                if auto_ack:
+                    print(f'popping {n} messages from <{queue_name}> (total {_num_to_read})')
+                else:
+                    print(f'peeking at {n} messages in <{queue_name}> (total {_num_to_read})')
+
             if n > _num_to_read:
                 warnings.warn(f'n > queue length, this method blocks until n messages have been read')
             _num_to_read = n
 
         elif verbose:
-            print(f'reading all messages from <{queue_name}> queue (total {_num_to_read}); auto_ack={auto_ack}')
+            if auto_ack:
+                print(f'popping messages from <{queue_name}> (total {_num_to_read})')
+            else:
+                print(f'peeking at messages in <{queue_name}> (total {_num_to_read})')
 
         assert type(_num_to_read) is int
 
@@ -237,8 +244,9 @@ class RMQ:
         counts = [item_count]
         times = [time.time()]
         if verbose:
-            print(f'waiting for {insert_name} to be {_ready_empty}...' +
-                  f' (elapsed {format_seconds(time.time() - _time_start)}, len={item_count})')
+            print(f'waiting for {insert_name} to be {_ready_empty}...'
+                  f' (elapsed {format_seconds(time.time() - _time_start)},'
+                  f' len={item_count})')
 
         while item_count != target_value:
 
@@ -263,9 +271,9 @@ class RMQ:
 
             # print estimate time remaining
             if verbose:
-                print(f'waiting for {insert_name} to be {_ready_empty}...' +
-                      f' (elapsed {format_seconds(time.time() - _time_start)},' +
-                      f' len={item_count},' +
+                print(f'waiting for {insert_name} to be {_ready_empty}...'
+                      f' (elapsed {format_seconds(time.time() - _time_start)},'
+                      f' len={item_count},'
                       f' remaining {format_seconds(eta)})')
 
     def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
