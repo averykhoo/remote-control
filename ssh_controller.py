@@ -42,7 +42,7 @@ class SSH:
         self.password = password
         self.logfile = logfile
         self.name = name
-        self.log_separator = '--'
+        self.log_separator = '--'  # compatible with jdump files
 
         try:
             with SSHConnection(self.ip_address, self.port, self.username, self.password, timeout=30):
@@ -55,21 +55,24 @@ class SSH:
         insert_name = f'[{self.name}]=' if self.name is not None else ''
         return f'SSH<{insert_name}{self.username}@{self.ip_address}:{self.port}>'
 
+    def _log(self, json_data):
+        if self.logfile is not None:
+            with open(self.logfile, mode='at', encoding='utf8', newline='\n') as f:
+                f.write(json.dumps(json_data, indent=4, sort_keys=True, ensure_ascii=False) + '\n')
+                if self.log_separator:
+                    f.write(self.log_separator + '\n')
+
     def execute(self, command, wait_for_output=True):
         out = None
         err = None
 
-        # log
-        if self.logfile is not None:
-            with open(self.logfile, mode='at', encoding='utf8') as f:
-                f.write(json.dumps({'ip_address': self.ip_address,
-                                    'port':       self.port,
-                                    'username':   self.username,
-                                    'command':    command,
-                                    'timestamp':  datetime.datetime.now().isoformat(),
-                                    }) + '\n')
-                if self.log_separator:
-                    f.write(self.log_separator + '\n')
+        self._log({'function':   'execute',
+                   'ip_address': self.ip_address,
+                   'port':       self.port,
+                   'username':   self.username,
+                   'command':    command,
+                   'timestamp':  datetime.datetime.now().isoformat(),
+                   })
 
         # run command and (maybe) get output
         with SSHConnection(self.ip_address, self.port, self.username, self.password) as ssh_conn:
@@ -107,6 +110,15 @@ class SSH:
     def kill(self, pid: int):
         pid = int(pid)
         assert pid > 10  # don't kill the kernel pls
+
+        self._log({'function':   'kill',
+                   'ip_address': self.ip_address,
+                   'port':       self.port,
+                   'username':   self.username,
+                   'pid':        pid,
+                   'timestamp':  datetime.datetime.now().isoformat(),
+                   })
+
         self.execute(f'kill -9 {pid}')
 
     def ps_ef(self, cmd_grep_patterns=None, kill=False):
@@ -116,6 +128,14 @@ class SSH:
             cmd_grep_patterns = []
         elif type(cmd_grep_patterns) is str:
             cmd_grep_patterns = [cmd_grep_patterns]
+
+        self._log({'function':          'ps_ef',
+                   'ip_address':        self.ip_address,
+                   'port':              self.port,
+                   'username':          self.username,
+                   'cmd_grep_patterns': cmd_grep_patterns,
+                   'timestamp':         datetime.datetime.now().isoformat(),
+                   })
 
         # get ps info
         lines = [line.split(maxsplit=7) for line in self.execute('ps -ef').split('\n')[1:] if line.strip()]
@@ -159,6 +179,15 @@ class SSH:
         elif type(cmd_grep_patterns) is str:
             cmd_grep_patterns = [cmd_grep_patterns]
 
+        self._log({'function':          'process_running',
+                   'ip_address':        self.ip_address,
+                   'port':              self.port,
+                   'username':          self.username,
+                   'remote_path':       process_name,
+                   'cmd_grep_patterns': cmd_grep_patterns,
+                   'timestamp':         datetime.datetime.now().isoformat(),
+                   })
+
         cmd = 'ps -ef'
         for pattern in cmd_grep_patterns:
             if grep_case:
@@ -172,6 +201,14 @@ class SSH:
         remote_path = str(remote_path)
         assert remote_path.startswith('/')
 
+        self._log({'function':    'exists',
+                   'ip_address':  self.ip_address,
+                   'port':        self.port,
+                   'username':    self.username,
+                   'remote_path': remote_path,
+                   'timestamp':   datetime.datetime.now().isoformat(),
+                   })
+
         if self.execute(f'ls -l {remote_path}').rstrip('\r\n'):
             return True
         return False
@@ -179,6 +216,14 @@ class SSH:
     def mkdir(self, remote_path, parents=True):
         remote_path = str(remote_path)
         assert remote_path.startswith('/'), 'remote path must be absolute'
+
+        self._log({'function':    'mkdir',
+                   'ip_address':  self.ip_address,
+                   'port':        self.port,
+                   'username':    self.username,
+                   'remote_path': remote_path,
+                   'timestamp':   datetime.datetime.now().isoformat(),
+                   })
 
         if parents:
             return self.execute(f'mkdir --parents "{remote_path}"')
@@ -189,12 +234,28 @@ class SSH:
         remote_path = str(remote_path)
         assert remote_path.startswith('/')
 
+        self._log({'function':    'mv',
+                   'ip_address':  self.ip_address,
+                   'port':        self.port,
+                   'username':    self.username,
+                   'remote_path': remote_path,
+                   'timestamp':   datetime.datetime.now().isoformat(),
+                   })
+
         return self.execute(f'mv "{remote_path}" "{new_remote_path}"')
 
     def rm(self, remote_path, recursive=False, force=True):
         remote_path = str(remote_path)
         assert remote_path.startswith('/')
         assert remote_path.count('/') > 1  # don't delete root pls
+
+        self._log({'function':    'tar_gz',
+                   'ip_address':  self.ip_address,
+                   'port':        self.port,
+                   'username':    self.username,
+                   'remote_path': remote_path,
+                   'timestamp':   datetime.datetime.now().isoformat(),
+                   })
 
         rm_command = 'rm '
 
@@ -214,6 +275,14 @@ class SSH:
     def tar_gz(self, remote_target, remote_output_path):
         remote_target = str(remote_target)
         remote_output_path = str(remote_output_path)
+        self._log({'function':           'tar_gz',
+                   'ip_address':         self.ip_address,
+                   'port':               self.port,
+                   'username':           self.username,
+                   'remote_target':      remote_target,
+                   'remote_output_path': remote_output_path,
+                   'timestamp':          datetime.datetime.now().isoformat(),
+                   })
 
         # must be using absolute paths
         assert remote_target.startswith('/')
@@ -269,17 +338,14 @@ class SSH:
         if verbose:
             print(f'retrieving: <{remote_path}>')
             print(f'        to: <{local_path}>')
-        if self.logfile is not None:
-            with open(self.logfile, mode='at', encoding='utf8') as f:
-                f.write(json.dumps({'ip_address':        self.ip_address,
-                                    'port':              self.port,
-                                    'username':          self.username,
-                                    'remote_source':     remote_path,
-                                    'local_destination': local_path,
-                                    'timestamp':         datetime.datetime.now().isoformat(),
-                                    }) + '\n')
-                if self.log_separator:
-                    f.write(self.log_separator + '\n')
+        self._log({'function':          'scp_remote_to_local',
+                   'ip_address':        self.ip_address,
+                   'port':              self.port,
+                   'username':          self.username,
+                   'remote_source':     remote_path,
+                   'local_destination': local_path,
+                   'timestamp':         datetime.datetime.now().isoformat(),
+                   })
 
         # scp to temp path
         with SSHConnection(self.ip_address, self.port, self.username, self.password) as ssh_conn:
@@ -328,17 +394,14 @@ class SSH:
         if verbose:
             print(f'transmitting: <{local_path}>')
             print(f'          to: <{remote_path}>')
-        if self.logfile is not None:
-            with open(self.logfile, mode='at', encoding='utf8') as f:
-                f.write(json.dumps({'ip_address':         self.ip_address,
-                                    'port':               self.port,
-                                    'username':           self.username,
-                                    'local_source':       local_path,
-                                    'remote_destination': remote_path,
-                                    'timestamp':          datetime.datetime.now().isoformat(),
-                                    }) + '\n')
-                if self.log_separator:
-                    f.write(self.log_separator + '\n')
+        self._log({'function':           'scp_local_to_remote',
+                   'ip_address':         self.ip_address,
+                   'port':               self.port,
+                   'username':           self.username,
+                   'local_source':       local_path,
+                   'remote_destination': remote_path,
+                   'timestamp':          datetime.datetime.now().isoformat(),
+                   })
 
         # scp to temp path
         with SSHConnection(self.ip_address, self.port, self.username, self.password) as ssh_conn:
