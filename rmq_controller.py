@@ -88,11 +88,13 @@ class RMQ:
 
     def _log(self, json_data):
 
-        json_data['ip_address'] = self.ip_address
-        json_data['port'] = self.port
-        json_data['virtual_host'] = self.virtual_host
-        json_data['username'] = self.username
-        json_data['timestamp'] = datetime.datetime.now().isoformat()
+        json_data['config'] = {
+            'ip_address':   self.ip_address,
+            'port':         self.port,
+            'virtual_host': self.virtual_host,
+            'username':     self.username,
+            'timestamp':    datetime.datetime.now().isoformat(),
+        }
 
         if self.logfile is not None:
             for _ in range(5):
