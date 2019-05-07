@@ -48,7 +48,7 @@ class SSH:
         try:
             with SSHConnection(self.ip_address, self.port, self.username, self.password, timeout=30):
                 pass
-        except:
+        except Exception:
             print('SSH connection test failed')
             raise
 
@@ -77,7 +77,7 @@ class SSH:
                         if self.log_separator:
                             f.write(self.log_separator + '\n')
                     break
-                except:
+                except IOError:
                     time.sleep(1)
 
     def execute(self, command, wait_for_output=True):
@@ -97,18 +97,18 @@ class SSH:
 
                 try:
                     out = out.decode('utf8')
-                except:
+                except UnicodeDecodeError:
                     print('could not decode stdout as utf8')
 
                 try:
                     err = stderr.read().rstrip()
-                except:
+                except paramiko.SSHException:
                     print('could not read stderr')
                     err = b''
 
                 try:
                     err = err.decode('utf8')
-                except:
+                except paramiko.SSHException:
                     print('could not decode stderr as utf8')
 
             elif 'nohup' not in command:
@@ -330,7 +330,7 @@ class SSH:
             ftp_conn = ssh_conn.open_sftp()
             try:
                 ftp_conn.get(remote_path, tmp_path)
-            except:
+            except paramiko.SSHException:
                 print('could not retrieve file')
 
             ftp_conn.close()
@@ -382,7 +382,7 @@ class SSH:
             ftp_conn = ssh_conn.open_sftp()
             try:
                 ftp_conn.put(local_path, tmp_path)
-            except:
+            except paramiko.SSHException:
                 print('could not transmit file')
 
             ftp_conn.close()

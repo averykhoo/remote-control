@@ -74,7 +74,7 @@ class RMQ:
         try:
             with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
                 assert rmq_channel.is_open
-        except:
+        except Exception:
             print('RMQ connection test failed')
             raise
 
@@ -104,7 +104,7 @@ class RMQ:
                         if self.log_separator:
                             f.write(self.log_separator + '\n')
                     break
-                except:
+                except IOError:
                     time.sleep(1)
 
     def get_count(self, queue_names):
