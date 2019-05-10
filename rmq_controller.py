@@ -259,6 +259,13 @@ class RMQ:
 
             # check count again
             item_count = self.get_count(queue_names)
+
+            # don't add duplicate count timestamps
+            if len(counts) > 1 and counts[-1] == item_count:
+                counts.pop(-1)
+                times.pop(-1)
+
+            # add new counts
             counts.append(item_count)
             times.append(time.time())
 
