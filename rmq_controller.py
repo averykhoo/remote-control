@@ -280,10 +280,11 @@ class RMQ:
                 if eta < 0:
                     warnings.warn(f'queue count for <{",".join(queue_names)}> diverging from {target_value}')
 
-                # average over the last ten total-time estimates
-                estimates.append(eta + time.time() - _time_start)
-                estimate = sum(estimates[-_num_avg:]) / len(estimates[-_num_avg:])
-                eta = estimate + _time_start - time.time()
+                else:
+                    # average over the last ten total-time estimates
+                    estimates.append(eta + time.time() - _time_start)
+                    estimate = sum(estimates[-_num_avg:]) / len(estimates[-_num_avg:])
+                    eta = estimate + _time_start - time.time()
             else:
                 eta = _eta_max
             eta = min(eta, _eta_max)
