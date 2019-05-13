@@ -271,28 +271,28 @@ class RMQ:
             counts.append(item_count)
 
             # calculate difference
-            if len(times) > _num_avg:
-                delta_time = times[-_num_avg:][0] - times[-2]
-                delta_count = counts[-_num_avg:][0] - counts[-2]
-            else:
+            if len(times) <= _num_avg + 2:
                 delta_time = times[0] - times[-1]
                 delta_count = counts[0] - counts[-1]
+            else:
+                # skip most recent timing since it can be updated for very slow queues
+                delta_time = times[-_num_avg - 2:][0] - times[-2]
+                delta_count = counts[-_num_avg - 2:][0] - counts[-2]
 
             # don't divide by zero
             if delta_count != 0:
                 eta = (item_count - target_value) * (delta_time / delta_count)
 
-                # maybe try exponential averaging od velocity
-                # or linreg on amount/time
+                # maybe try exponential averaging over velocity
                 # or moving average with reset confidence interval (e.g. 10% band)
                 if eta < 0:
                     warnings.warn(f'queue count for <{",".join(queue_names)}> diverging from {target_value}')
 
-                else:
-                    # average over the last ten total-time estimates
-                    estimates.append(eta + time.time() - _time_start)
-                    estimate = sum(estimates[-_num_avg:]) / len(estimates[-_num_avg:])
-                    eta = estimate + _time_start - time.time()
+                # else:
+                #     # average over the last ten total-time estimates
+                #     estimates.append(eta + time.time() - _time_start)
+                #     estimate = sum(estimates[-_num_avg:]) / len(estimates[-_num_avg:])
+                #     eta = estimate + _time_start - time.time()
             else:
                 eta = _eta_max
             eta = min(eta, _eta_max)
