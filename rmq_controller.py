@@ -278,7 +278,7 @@ class RMQ:
             if delta_count != 0:
                 eta = (item_count - target_value) * (delta_time / delta_count)
                 if eta < 0:
-                    warnings.warn(f'possible ingestion error, negative ETA remaining: {format_seconds(eta)}')
+                    warnings.warn(f'queue count for <{",".join(queue_names)}> diverging from {target_value}')
 
                 # average over the last ten total-time estimates
                 estimates.append(eta + time.time() - _time_start)
