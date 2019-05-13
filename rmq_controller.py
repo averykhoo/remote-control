@@ -245,13 +245,13 @@ class RMQ:
                    })
 
         item_count = self.get_count(queue_names)
-        counts = [item_count]
-        times = [time.time()]
         if verbose:
             print(f'waiting for <{",".join(queue_names)}> to be {_ready_empty}...'
                   f' (elapsed {format_seconds(time.time() - _time_start)},'
                   f' len={item_count})')
 
+        counts = [item_count]
+        times = [time.time()]
         while item_count != target_value:
 
             # wait a while
@@ -275,7 +275,7 @@ class RMQ:
 
             # don't divide by zero
             if delta_count != 0:
-                eta = item_count * (delta_time / delta_count)
+                eta = (item_count - target_value) * (delta_time / delta_count)
             else:
                 eta = _eta_max
             eta = min(eta, _eta_max)
