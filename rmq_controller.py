@@ -267,16 +267,24 @@ class RMQ:
                 times.pop(-1)
 
             # add new counts
-            counts.append(item_count)
             times.append(time.time())
+            counts.append(item_count)
 
             # calculate difference
-            delta_time = times[-_num_avg:][0] - times[-1]
-            delta_count = counts[-_num_avg:][0] - counts[-1]
+            if len(times) > _num_avg:
+                delta_time = times[-_num_avg:][0] - times[-2]
+                delta_count = counts[-_num_avg:][0] - counts[-2]
+            else:
+                delta_time = times[0] - times[-1]
+                delta_count = counts[0] - counts[-1]
 
             # don't divide by zero
             if delta_count != 0:
                 eta = (item_count - target_value) * (delta_time / delta_count)
+
+                # maybe try exponential averaging od velocity
+                # or linreg on amount/time
+                # or moving average with reset confidence interval (e.g. 10% band)
                 if eta < 0:
                     warnings.warn(f'queue count for <{",".join(queue_names)}> diverging from {target_value}')
 
