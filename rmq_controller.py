@@ -252,6 +252,7 @@ class RMQ:
 
         counts = [item_count]
         times = [time.time()]
+        estimates = []
         while item_count != target_value:
 
             # wait a while
@@ -276,6 +277,11 @@ class RMQ:
             # don't divide by zero
             if delta_count != 0:
                 eta = (item_count - target_value) * (delta_time / delta_count)
+
+                # average over the last ten total-time estimates
+                estimates.append(eta + time.time() - _time_start)
+                estimate = sum(estimates[-_num_avg:]) / len(estimates[-_num_avg:])
+                eta = estimate + _time_start - time.time()
             else:
                 eta = _eta_max
             eta = min(eta, _eta_max)
