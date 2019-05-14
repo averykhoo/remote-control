@@ -82,7 +82,7 @@ class CompletionTimeEstimator:
 
 
 class RemainingTimeEstimator:
-    def __init__(self, num_remaining, name=None):
+    def __init__(self, num_remaining: [int, None] = None, name: [str, None] = None):
         self.CTE = None
         self.estimate = None
         self.name = name

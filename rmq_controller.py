@@ -267,7 +267,6 @@ class RMQ:
 
     def wait_until_queues_empty(self, queue_names, verbose=True, sleep_seconds=30):
 
-        _num_avg = 10
         _eta_max = 999 * 365.25 * 24 * 60 * 60  # 999 years
         _time_start = time.time()
 
@@ -278,29 +277,25 @@ class RMQ:
                    'queue_names': queue_names,
                    })
 
-        item_count = self.get_count(queue_names)
-        estimator = RemainingTimeEstimator(item_count)
+        estimator = RemainingTimeEstimator()
 
-        if verbose:
-            print(f'waiting for <{",".join(queue_names)}> to be empty...'
-                  f' (elapsed {format_seconds(time.time() - _time_start)},'
-                  f' len={item_count})')
-
-        while item_count != 0:
-
-            # wait a while
-            time.sleep(sleep_seconds)
-
-            # check count again
+        while True:
             item_count = self.get_count(queue_names)
+            assert item_count >= 0
+
+            if item_count == 0:
+                break
+
+            # update estimator
             estimator.update(item_count)
+            eta = '<?>' if math.isnan(estimator.estimate) else format_seconds(min(_eta_max, estimator.estimate))
 
             # print estimate time remaining
             if verbose:
                 print(f'waiting for <{",".join(queue_names)}> to be empty...'
-                      f' (elapsed {format_seconds(time.time() - _time_start)},'
-                      f' len={item_count},'
-                      f' remaining {format_seconds(estimator.estimate)})')
+                      f' (elapsed {format_seconds(time.time() - _time_start)}, len={item_count}, remaining {eta})')
+
+            time.sleep(sleep_seconds)
 
     def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
         _time_start = time.time()
