@@ -6,6 +6,8 @@ import warnings
 import math
 import pika
 
+from estimate_time_remaining import RemainingTimeEstimator
+
 
 def format_seconds(num_seconds):
     """
@@ -263,82 +265,42 @@ class RMQ:
 
         return n_inserted
 
-    def wait_until_queues_ready(self, queue_names, target_value=0, verbose=True, sleep_seconds=30):
-        assert target_value >= 0
-        assert type(target_value) is int
+    def wait_until_queues_empty(self, queue_names, verbose=True, sleep_seconds=30):
 
         _num_avg = 10
         _eta_max = 999 * 365.25 * 24 * 60 * 60  # 999 years
-        _ready_empty = 'ready' if target_value else 'empty'
         _time_start = time.time()
 
         if type(queue_names) is str:
             queue_names = [queue_names]
 
-        self._log({'function':     'wait_until_queues_ready',
-                   'queue_names':  queue_names,
-                   'target_value': target_value,
+        self._log({'function':    'wait_until_queues_ready',
+                   'queue_names': queue_names,
                    })
 
         item_count = self.get_count(queue_names)
+        estimator = RemainingTimeEstimator(item_count)
+
         if verbose:
-            print(f'waiting for <{",".join(queue_names)}> to be {_ready_empty}...'
+            print(f'waiting for <{",".join(queue_names)}> to be empty...'
                   f' (elapsed {format_seconds(time.time() - _time_start)},'
                   f' len={item_count})')
 
-        counts = [item_count]
-        times = [time.time()]
-        estimates = []
-        while item_count != target_value:
+        while item_count != 0:
 
             # wait a while
             time.sleep(sleep_seconds)
 
             # check count again
             item_count = self.get_count(queue_names)
-
-            # don't add duplicate count timestamps
-            if len(counts) > 1 and counts[-1] == item_count:
-                counts.pop(-1)
-                times.pop(-1)
-
-            # add new counts
-            times.append(time.time())
-            counts.append(item_count)
-
-            # calculate difference
-            if len(times) <= _num_avg + 2:
-                delta_time = times[0] - times[-1]
-                delta_count = counts[0] - counts[-1]
-            else:
-                # skip most recent timing since it can be updated for very slow queues
-                delta_time = times[-_num_avg - 2:][0] - times[-2]
-                delta_count = counts[-_num_avg - 2:][0] - counts[-2]
-
-            # don't divide by zero
-            if delta_count != 0:
-                eta = (item_count - target_value) * (delta_time / delta_count)
-
-                # maybe try exponential averaging over velocity
-                # or moving average with reset confidence interval (e.g. 10% band)
-                if eta < 0:
-                    warnings.warn(f'queue count for <{",".join(queue_names)}> diverging from {target_value}')
-
-                else:
-                    # average over the last few total-time estimates (20 seems like a good amount for my data)
-                    estimates.append(eta + time.time() - _time_start)
-                    estimate = sum(estimates[-_num_avg * 2:]) / len(estimates[-_num_avg * 2:])
-                    eta = estimate + _time_start - time.time()
-            else:
-                eta = _eta_max
-            eta = min(eta, _eta_max)
+            estimator.update(item_count)
 
             # print estimate time remaining
             if verbose:
-                print(f'waiting for <{",".join(queue_names)}> to be {_ready_empty}...'
+                print(f'waiting for <{",".join(queue_names)}> to be empty...'
                       f' (elapsed {format_seconds(time.time() - _time_start)},'
                       f' len={item_count},'
-                      f' remaining {format_seconds(eta)})')
+                      f' remaining {format_seconds(estimator.estimate)})')
 
     def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
         _time_start = time.time()

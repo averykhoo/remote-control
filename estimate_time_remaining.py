@@ -1,4 +1,5 @@
 import time
+import warnings
 
 import math
 
@@ -25,10 +26,10 @@ class CompletionTimeEstimator:
         last_n, last_t = self.count_history[-1]
         delta_n = last_n - num_remaining
         delta_t = timestamp - last_t
-
-        # invariants
-        assert delta_n >= 0
         assert delta_t > 0
+
+        if delta_n < 0:
+            warnings.warn('item count increased, should only decrease')
 
         # update history
         self.count_history.append((num_remaining, timestamp))
