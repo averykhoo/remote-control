@@ -97,6 +97,11 @@ class CompletionTimeEstimator:
         for c, t in self.count_history[-self.sample_size:]:
             estimates.append(t + c / self.rate)
 
+        # try to keep only future-dated estimates
+        tmp = [e for e in estimates if e > timestamp]
+        if tmp:
+            estimates = tmp
+
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
         return self.estimate
@@ -139,6 +144,8 @@ class RemainingTimeEstimator:
         # moving exponential average for estimate to prevent jumps
         if math.isnan(self.eta):
             self.eta = completion_estimate
+        elif self.eta <= timestamp:
+            self.eta = max(completion_estimate, timestamp)
         else:
             self.eta = self.eta * self.smoothing_factor + completion_estimate * (1 - self.smoothing_factor)
 

@@ -265,7 +265,7 @@ class RMQ:
 
         return n_inserted
 
-    def wait_until_queues_empty(self, queue_names, verbose=True, sleep_seconds=30):
+    def wait_until_queues_empty(self, queue_names, verbose=True, sleep_seconds=30, estimator=None):
 
         _eta_max = 999 * 365.25 * 24 * 60 * 60  # 999 years
         _time_start = time.time()
@@ -277,7 +277,8 @@ class RMQ:
                    'queue_names': queue_names,
                    })
 
-        estimator = RemainingTimeEstimator()
+        if estimator is None:
+            estimator = RemainingTimeEstimator()
 
         while True:
             item_count = self.get_count(queue_names)
