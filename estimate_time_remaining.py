@@ -28,45 +28,16 @@ class CompletionTimeEstimator:
         self.smoothing_factor = 0.5  # exponential moving average
 
         self.count_history = [(num_remaining, timestamp)]
-        self.moving_count_history = [(num_remaining, timestamp)]
+        self.monotonic_history = [(num_remaining, timestamp)]
         self.rate_history = []
 
         self.rate = float('nan')
         self.estimate = float('nan')
 
-    def update(self, num_remaining, timestamp):
-        """
-        :param num_remaining: number of items left to process
-        :type num_remaining: int
-        :param timestamp: unix/windows timestamp or time.time()
-        :type timestamp: [int, float]
-        """
-
-        # calculate delta from last update
-        last_n, last_t = self.count_history[-1]
-        delta_n = last_n - num_remaining
-        delta_t = timestamp - last_t
-        assert delta_t > 0
-
-        # item count should not increase
-        if delta_n < 0:
-            warnings.warn('item count increased, it should only decrease')
-
-        # update history
-        self.count_history.append((num_remaining, timestamp))
-        if delta_n > 0:
-            self.moving_count_history.append((num_remaining, timestamp))
-
-            # recalculate rate
-            if len(self.moving_count_history) > 1:
-                first_n, first_t = self.moving_count_history[-(self.sample_size + 1):][0]
-                last_n, last_t = self.moving_count_history[-1]
-                self.rate_history.append(((first_n - last_n) / (last_t - first_t), timestamp))
-
-        # no rate of change logged, stop here
+    def _update_rate(self):
         if not self.rate_history:
-            self.estimate = float('nan')
-            return self.estimate
+            self.rate = float('nan')
+            return self.rate
 
         # just use mean rate if less than 5 sample rates
         if len(self.rate_history) < 5:
@@ -85,12 +56,50 @@ class CompletionTimeEstimator:
                 weighted_rates.append(rate * (t - t0) / rate_window_len)
                 t0 = t
             new_rate = sum(weighted_rates)
+            assert new_rate > 0
 
         # moving exponential average for rate to prevent jumps
         if math.isnan(self.rate):
             self.rate = new_rate
         else:
             self.rate = self.rate * self.smoothing_factor + new_rate * (1 - self.smoothing_factor)
+
+        # not really necessary to return, but why not
+        return self.rate
+
+    def update(self, num_remaining, timestamp):
+        """
+        :param num_remaining: number of items left to process
+        :type num_remaining: int
+        :param timestamp: unix/windows timestamp or time.time()
+        :type timestamp: [int, float]
+        """
+
+        # calculate delta from last update
+        last_n, _ = self.monotonic_history[-1]
+        _, last_t = self.count_history[-1]
+        assert timestamp > last_t
+
+        # item count should not increase
+        if num_remaining > last_n:
+            warnings.warn('item count increased, it should only decrease')
+
+        # update history
+        self.count_history.append((num_remaining, timestamp))
+        if num_remaining < last_n:
+            self.monotonic_history.append((num_remaining, timestamp))
+
+            # recalculate rate
+            if len(self.monotonic_history) > 1:
+                first_n, first_t = self.monotonic_history[-(self.sample_size + 1):][0]
+                last_n, last_t = self.monotonic_history[-1]
+                self.rate_history.append(((first_n - last_n) / (last_t - first_t), timestamp))
+
+        # try to estimate rate of change
+        self._update_rate()
+        if math.isnan(self.rate):
+            self.estimate = float('nan')
+            return self.estimate
 
         # given the rate, what are the expected end times for past historical counts
         estimates = []
