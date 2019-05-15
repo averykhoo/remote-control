@@ -24,7 +24,7 @@ class CompletionTimeEstimator:
         :type timestamp: [int, float]
         """
 
-        self.sample_size = 6
+        self.sample_size = 5  # auto-increases if there are many repeated measurements
         self.smoothing_factor = 0.5  # exponential moving average
 
         self.count_history = [(num_remaining, timestamp)]
@@ -80,12 +80,20 @@ class CompletionTimeEstimator:
         _, last_t = self.count_history[-1]
         assert timestamp > last_t
 
+        # update history
+        self.count_history.append((num_remaining, timestamp))
+
         # item count should not increase
         if num_remaining > last_n:
             warnings.warn('item count increased, it should only decrease')
+            self.sample_size += 1
 
-        # update history
-        self.count_history.append((num_remaining, timestamp))
+        # update sample size
+        if num_remaining == last_n:
+            self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
+            self.sample_size = max(self.sample_size, 3000)  # about a day of 30-second samples
+
+        # update monotonic history
         if num_remaining < last_n:
             self.monotonic_history.append((num_remaining, timestamp))
 
@@ -94,9 +102,9 @@ class CompletionTimeEstimator:
                 first_n, first_t = self.monotonic_history[-(self.sample_size + 1):][0]
                 last_n, last_t = self.monotonic_history[-1]
                 self.rate_history.append(((first_n - last_n) / (last_t - first_t), timestamp))
+                self._update_rate()
 
-        # try to estimate rate of change
-        self._update_rate()
+        # rate of change could not be estimated
         if math.isnan(self.rate):
             self.estimate = float('nan')
             return self.estimate
@@ -106,10 +114,14 @@ class CompletionTimeEstimator:
         for c, t in self.count_history[-self.sample_size:]:
             estimates.append(t + c / self.rate)
 
-        # try to keep only future-dated estimates
-        tmp = [e for e in estimates if e > timestamp]
-        if tmp:
-            estimates = tmp
+        # try to keep only future-dated estimates if work remains to be done
+        if num_remaining > 0 and any(e > timestamp for e in estimates):
+            estimates = [e for e in estimates if e > timestamp]
+
+        # housekeeping
+        self.count_history = self.count_history[-(self.sample_size + 1):]
+        self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]
+        self.rate_history = self.rate_history[-(self.sample_size + 1):]
 
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
