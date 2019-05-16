@@ -118,10 +118,10 @@ class CompletionTimeEstimator:
         if num_remaining > 0 and any(e > timestamp for e in estimates):
             estimates = [e for e in estimates if e > timestamp]
 
-        # housekeeping
-        # self.count_history = self.count_history[-(self.sample_size + 1):]  # needed for sample size update
-        self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]
-        self.rate_history = self.rate_history[-(self.sample_size + 1):]
+        # # housekeeping
+        # # self.count_history = self.count_history[-(self.sample_size + 1):]  # needed for sample size update
+        # self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]
+        # self.rate_history = self.rate_history[-(self.sample_size + 1):]
 
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
