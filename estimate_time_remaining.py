@@ -89,7 +89,7 @@ class CompletionTimeEstimator:
             self.sample_size += 1
 
         # update sample size
-        self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
+        # self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
         self.sample_size = min(self.sample_size, int(len(self.count_history) / 4))  # last 25% of readings
         self.sample_size = max(self.sample_size, 3000)  # about a day of 30-second samples
 

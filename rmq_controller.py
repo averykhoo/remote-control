@@ -2,6 +2,7 @@ import datetime
 import json
 import time
 import warnings
+from typing import Union, Iterable
 
 import math
 import pika
@@ -265,13 +266,19 @@ class RMQ:
 
         return n_inserted
 
-    def wait_until_queues_empty(self, queue_names, verbose=True, sleep_seconds=30):
-
+    def wait_until_queues_empty(self, queue_names: Union[str, Iterable[str]], verbose: Union[bool, int, float] = True):
         _eta_max = 999 * 365.25 * 24 * 60 * 60  # 999 years
         _time_start = time.time()
         _completed = set()
+        _print_seconds = 40
+        _sleep_seconds = 5
+        _last_print_time = -1
 
-        if type(queue_names) is str:
+        if verbose:
+            if isinstance(verbose, int) or isinstance(verbose, float):
+                _print_seconds = max(verbose, _sleep_seconds)
+
+        if isinstance(queue_names, str):
             queue_names = [queue_names]
 
         self._log({'function':    'wait_until_queues_ready',
@@ -313,26 +320,32 @@ class RMQ:
             if total_count == 0:
                 break
 
-            # eta is the worst case estimate
-            worst_case_estimate = float('nan')
-            for estimator in estimators.values():
-                if not math.isnan(estimator.estimate):
-                    if math.isnan(worst_case_estimate):
-                        worst_case_estimate = estimator.estimate
-                    else:
-                        worst_case_estimate = max(worst_case_estimate, estimator.estimate)
-            eta = '<?>' if math.isnan(worst_case_estimate) else format_seconds(min(_eta_max, worst_case_estimate))
-
             # print estimated time remaining
             if verbose:
-                unfinished_queues = sorted(queue_name for queue_name in queue_names if queue_name not in _completed)
-                print(f'waiting for <{",".join(unfinished_queues)}> to be empty...'
-                      f' (elapsed {format_seconds(time.time() - _time_start)}, len={total_count}, remaining {eta})')
+                if time.time() - _last_print_time >= _print_seconds:
+
+                    # eta is the worst case estimate
+                    worst_case_estimate = None
+                    for estimator in estimators.values():
+                        if not math.isnan(estimator.estimate):
+                            if math.isnan(worst_case_estimate):
+                                worst_case_estimate = estimator.estimate
+                            else:
+                                worst_case_estimate = max(worst_case_estimate, estimator.estimate)
+
+                    # stuff to print
+                    unfinished_queues = sorted(queue_name for queue_name in queue_names if queue_name not in _completed)
+                    eta = '<?>' if worst_case_estimate is None else format_seconds(min(_eta_max, worst_case_estimate))
+
+                    # print info
+                    print(f'waiting for <{",".join(unfinished_queues)}> to be empty... '
+                          f'(elapsed {format_seconds(time.time() - _time_start)}, len={total_count}, remaining {eta})')
+                    _last_print_time = time.time()
 
             # wait a while and then continue
-            time.sleep(sleep_seconds)
+            time.sleep(_sleep_seconds)
 
-    def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
+    def wait_until_queues_stabilized(self, queue_names, sleep_seconds=30, verbose=True):
         _time_start = time.time()
 
         if type(queue_names) is str:
