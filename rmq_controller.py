@@ -294,15 +294,17 @@ class RMQ:
 
                 # ignore empty queues
                 if queue_count == 0:
-                    if queue_name in _completed:
-                        continue
-                    _completed.add(queue_name)
-                    print(f'<{queue_name}> is empty (elapsed {format_seconds(time.time() - _time_start)})')
+                    if queue_name not in _completed:
+                        print(f'<{queue_name}> is empty (elapsed {format_seconds(time.time() - _time_start)})')
+                        _completed.add(queue_name)
                     continue
 
                 # queues that somehow got refilled
                 if queue_name in _completed:
-                    print(f'<{queue_name}> no longer empty!')
+                    warnings.warn(f'<{queue_name}> unexpectedly refilled! (time estimate will be reset)')
+                    _completed.remove(queue_name)
+                    del estimators[queue_name]
+                    estimators[queue_name] = RemainingTimeEstimator(name=queue_name)
 
                 # update estimator
                 estimators[queue_name].update(queue_count)
@@ -321,11 +323,13 @@ class RMQ:
                         worst_case_estimate = max(worst_case_estimate, estimator.estimate)
             eta = '<?>' if math.isnan(worst_case_estimate) else format_seconds(min(_eta_max, worst_case_estimate))
 
-            # print estimate time remaining
+            # print estimated time remaining
             if verbose:
-                print(f'waiting for <{",".join(queue_names)}> to be empty...'
+                unfinished_queues = sorted(queue_name for queue_name in queue_names if queue_name not in _completed)
+                print(f'waiting for <{",".join(unfinished_queues)}> to be empty...'
                       f' (elapsed {format_seconds(time.time() - _time_start)}, len={total_count}, remaining {eta})')
 
+            # wait a while and then continue
             time.sleep(sleep_seconds)
 
     def wait_until_queues_stabilized(self, queue_names, verbose=True, sleep_seconds=30):
