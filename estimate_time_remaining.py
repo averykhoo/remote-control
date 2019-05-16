@@ -33,6 +33,7 @@ class CompletionTimeEstimator:
 
         self.rate = float('nan')
         self.estimate = float('nan')
+        self.uncertainty = float('nan')
 
     def _update_rate(self):
         if not self.rate_history:
@@ -125,6 +126,7 @@ class CompletionTimeEstimator:
 
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
+        self.uncertainty = max(max(estimates) - self.estimate, self.estimate - min(estimates))
         return self.estimate
 
 
@@ -176,6 +178,6 @@ class RemainingTimeEstimator:
 
     def __str__(self):
         if self.name is None:
-            return f'RemainingTime<{self.estimate}>'
+            return f'RemainingTime<{self.estimate}±{self.CTE.uncertainty}>'
         else:
-            return f'RemainingTime<[{self.name}]={self.estimate}>'
+            return f'RemainingTime<[{self.name}]={self.estimate}±{self.CTE.uncertainty}>'
