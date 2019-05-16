@@ -89,9 +89,9 @@ class CompletionTimeEstimator:
             self.sample_size += 1
 
         # update sample size
-        if num_remaining == last_n:
-            self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
-            self.sample_size = max(self.sample_size, 3000)  # about a day of 30-second samples
+        self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
+        self.sample_size = min(self.sample_size, int(len(self.count_history) / 4))  # last 25% of readings
+        self.sample_size = max(self.sample_size, 3000)  # about a day of 30-second samples
 
         # update monotonic history
         if num_remaining < last_n:
@@ -119,7 +119,7 @@ class CompletionTimeEstimator:
             estimates = [e for e in estimates if e > timestamp]
 
         # housekeeping
-        self.count_history = self.count_history[-(self.sample_size + 1):]
+        # self.count_history = self.count_history[-(self.sample_size + 1):]  # needed for sample size update
         self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]
         self.rate_history = self.rate_history[-(self.sample_size + 1):]
 

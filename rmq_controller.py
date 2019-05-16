@@ -265,10 +265,11 @@ class RMQ:
 
         return n_inserted
 
-    def wait_until_queues_empty(self, queue_names, verbose=True, sleep_seconds=30, estimator=None):
+    def wait_until_queues_empty(self, queue_names, verbose=True, sleep_seconds=30):
 
         _eta_max = 999 * 365.25 * 24 * 60 * 60  # 999 years
         _time_start = time.time()
+        _completed = set()
 
         if type(queue_names) is str:
             queue_names = [queue_names]
@@ -277,24 +278,53 @@ class RMQ:
                    'queue_names': queue_names,
                    })
 
-        if estimator is None:
-            estimator = RemainingTimeEstimator()
+        # estimator = RemainingTimeEstimator()
+        estimators = dict()
+        for queue_name in queue_names:
+            estimators[queue_name] = RemainingTimeEstimator(name=queue_name)
 
         while True:
-            item_count = self.get_count(queue_names)
-            assert item_count >= 0
+            total_count = 0
 
-            if item_count == 0:
+            # update all estimators individually
+            for queue_name in queue_names:
+                queue_count = self.get_count(queue_name)
+                assert queue_count >= 0
+                total_count += queue_count
+
+                # ignore empty queues
+                if queue_count == 0:
+                    if queue_name in _completed:
+                        continue
+                    _completed.add(queue_name)
+                    print(f'<{queue_name}> is empty (elapsed {format_seconds(time.time() - _time_start)})')
+                    continue
+
+                # queues that somehow got refilled
+                if queue_name in _completed:
+                    print(f'<{queue_name}> no longer empty!')
+
+                # update estimator
+                estimators[queue_name].update(queue_count)
+
+            # completed?
+            if total_count == 0:
                 break
 
-            # update estimator
-            estimator.update(item_count)
-            eta = '<?>' if math.isnan(estimator.estimate) else format_seconds(min(_eta_max, estimator.estimate))
+            # eta is the worst case estimate
+            worst_case_estimate = float('nan')
+            for estimator in estimators.values():
+                if not math.isnan(estimator.estimate):
+                    if math.isnan(worst_case_estimate):
+                        worst_case_estimate = estimator.estimate
+                    else:
+                        worst_case_estimate = max(worst_case_estimate, estimator.estimate)
+            eta = '<?>' if math.isnan(worst_case_estimate) else format_seconds(min(_eta_max, worst_case_estimate))
 
             # print estimate time remaining
             if verbose:
                 print(f'waiting for <{",".join(queue_names)}> to be empty...'
-                      f' (elapsed {format_seconds(time.time() - _time_start)}, len={item_count}, remaining {eta})')
+                      f' (elapsed {format_seconds(time.time() - _time_start)}, len={total_count}, remaining {eta})')
 
             time.sleep(sleep_seconds)
 
