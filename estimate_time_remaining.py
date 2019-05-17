@@ -13,6 +13,8 @@ def mean(vec):
 
 
 class CompletionTimeEstimator:
+    _max_sample_size = 3000  # about 4hrs of 5-second samples
+
     sample_size: int
     smoothing_factor: float
 
@@ -31,7 +33,7 @@ class CompletionTimeEstimator:
         :param timestamp: unix/windows timestamp or time.time()
         :type timestamp: [int, float]
         """
-        self._reset(5, 0.5)
+        self._reset(5, 0.3)
         self.count_history.append((num_remaining, timestamp))
         self.monotonic_history.append((num_remaining, timestamp))
 
@@ -48,10 +50,9 @@ class CompletionTimeEstimator:
         self.estimate = float('nan')
         self.uncertainty = float('nan')
 
-    def _update_rate(self):
-        if not self.rate_history:
-            self.rate = float('nan')
-            return self.rate
+    def _update_rate(self, instantaneous_rate):
+        self.rate_history.append(instantaneous_rate)
+        self.rate_history = self.rate_history[-(self.sample_size + 1):]  # housekeeping
 
         # just use mean rate if less than 5 sample rates
         if len(self.rate_history) < 5:
@@ -60,13 +61,13 @@ class CompletionTimeEstimator:
         # use weighted average by duration
         else:
             # total duration
-            t0 = self.rate_history[-(self.sample_size + 1):][0][-1]
+            t0 = self.rate_history[0][-1]
             rate_window_len = self.rate_history[-1][-1] - t0
             assert rate_window_len > 0
 
             # weighted average
             weighted_rates = []
-            for rate, t in self.rate_history[-(self.sample_size + 1):][1:]:
+            for rate, t in self.rate_history[1:]:
                 weighted_rates.append(rate * (t - t0) / rate_window_len)
                 t0 = t
             new_rate = sum(weighted_rates)
@@ -96,32 +97,35 @@ class CompletionTimeEstimator:
 
         # update history
         self.count_history.append((num_remaining, timestamp))
+        self.count_history = self.count_history[-(self._max_sample_size * 4 + 1):]  # 400% of max_sample_size
 
         # item count should not increase
         if num_remaining > last_n:
             warnings.warn('item count increased, it should only decrease (timer will reset)')
             self._reset(self.sample_size + 1, self.smoothing_factor)
+            self.count_history.append((num_remaining, timestamp))
+            self.monotonic_history.append((num_remaining, timestamp))
+            return self.estimate  # float('nan')
 
         # update sample size
         # self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
         self.sample_size = min(self.sample_size, int(len(self.count_history) / 4))  # last 25% of readings
-        self.sample_size = max(self.sample_size, 3000)  # about a day of 30-second samples
+        self.sample_size = max(self.sample_size, self._max_sample_size)
 
         # update monotonic history
         if num_remaining < last_n:
             self.monotonic_history.append((num_remaining, timestamp))
+            self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]  # housekeeping
 
             # recalculate rate
             if len(self.monotonic_history) > 1:
-                first_n, first_t = self.monotonic_history[-(self.sample_size + 1):][0]
+                first_n, first_t = self.monotonic_history[0]
                 last_n, last_t = self.monotonic_history[-1]
-                self.rate_history.append(((first_n - last_n) / (last_t - first_t), timestamp))
-                self._update_rate()
+                self._update_rate(((first_n - last_n) / (last_t - first_t), timestamp))
 
         # rate of change could not be estimated
         if math.isnan(self.rate):
-            self.estimate = float('nan')
-            return self.estimate
+            return self.estimate  # float('nan')
 
         # given the rate, what are the expected end times for past historical counts
         estimates = []
@@ -131,11 +135,6 @@ class CompletionTimeEstimator:
         # try to keep only future-dated estimates if work remains to be done
         if num_remaining > 0 and any(e > timestamp for e in estimates):
             estimates = [e for e in estimates if e > timestamp]
-
-        # # housekeeping
-        # # self.count_history = self.count_history[-(self.sample_size + 1):]  # needed for sample size update
-        # self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]
-        # self.rate_history = self.rate_history[-(self.sample_size + 1):]
 
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
