@@ -272,10 +272,10 @@ class RMQ:
         _completed = set()
         _print_seconds = 40
         _sleep_seconds = 5
-        _last_print_time = -1
+        _next_print_time = -1
 
         if verbose:
-            if isinstance(verbose, int) or isinstance(verbose, float):
+            if type(verbose) in (int, float):
                 _print_seconds = max(verbose, _sleep_seconds)
 
         if isinstance(queue_names, str):
@@ -322,13 +322,13 @@ class RMQ:
 
             # print estimated time remaining
             if verbose:
-                if time.time() - _last_print_time >= _print_seconds:
+                if time.time() >= _next_print_time:
 
                     # eta is the worst case estimate
                     worst_case_estimate = None
                     for estimator in estimators.values():
                         if not math.isnan(estimator.estimate):
-                            if math.isnan(worst_case_estimate):
+                            if worst_case_estimate is None:
                                 worst_case_estimate = estimator.estimate
                             else:
                                 worst_case_estimate = max(worst_case_estimate, estimator.estimate)
@@ -340,7 +340,8 @@ class RMQ:
                     # print info
                     print(f'waiting for <{",".join(unfinished_queues)}> to be empty... '
                           f'(elapsed {format_seconds(time.time() - _time_start)}, len={total_count}, remaining {eta})')
-                    _last_print_time = time.time()
+
+                    _next_print_time = time.time() + _print_seconds
 
             # wait a while and then continue
             time.sleep(_sleep_seconds)

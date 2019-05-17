@@ -13,8 +13,16 @@ def mean(vec):
 
 
 class CompletionTimeEstimator:
+    sample_size: int
+    smoothing_factor: float
+
+    count_history: list
+    monotonic_history: list
+    rate_history: list
+
     rate: float
     estimate: float
+    uncertainty: float
 
     def __init__(self, num_remaining, timestamp):
         """
@@ -23,12 +31,17 @@ class CompletionTimeEstimator:
         :param timestamp: unix/windows timestamp or time.time()
         :type timestamp: [int, float]
         """
+        self._reset(5, 0.5)
+        self.count_history.append((num_remaining, timestamp))
+        self.monotonic_history.append((num_remaining, timestamp))
 
-        self.sample_size = 5  # auto-increases if there are many repeated measurements
-        self.smoothing_factor = 0.5  # exponential moving average
+    def _reset(self, sample_size, smoothing_factor):
 
-        self.count_history = [(num_remaining, timestamp)]
-        self.monotonic_history = [(num_remaining, timestamp)]
+        self.sample_size = sample_size  # auto-increases if there are many repeated measurements
+        self.smoothing_factor = smoothing_factor  # exponential moving average
+
+        self.count_history = []
+        self.monotonic_history = []
         self.rate_history = []
 
         self.rate = float('nan')
@@ -86,8 +99,8 @@ class CompletionTimeEstimator:
 
         # item count should not increase
         if num_remaining > last_n:
-            warnings.warn('item count increased, it should only decrease')
-            self.sample_size += 1
+            warnings.warn('item count increased, it should only decrease (timer will reset)')
+            self._reset(self.sample_size + 1, self.smoothing_factor)
 
         # update sample size
         # self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
