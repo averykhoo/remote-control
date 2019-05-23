@@ -327,11 +327,11 @@ class RMQ:
                     # eta is the worst case estimate
                     worst_case_estimate = None
                     for estimator in estimators.values():
-                        if not math.isnan(estimator.estimate):
+                        if not math.isnan(estimator.get_estimate()):
                             if worst_case_estimate is None:
-                                worst_case_estimate = estimator.estimate
+                                worst_case_estimate = estimator.get_estimate()
                             else:
-                                worst_case_estimate = max(worst_case_estimate, estimator.estimate)
+                                worst_case_estimate = max(worst_case_estimate, estimator.get_estimate())
 
                     # stuff to print
                     unfinished_queues = sorted(queue_name for queue_name in queue_names if queue_name not in _completed)

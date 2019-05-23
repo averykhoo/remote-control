@@ -1,15 +1,8 @@
 import time
 import warnings
+from statistics import mean, stdev
 
 import math
-
-
-def mean(vec):
-    tmp = [elem for elem in vec if elem is not None and not math.isnan(elem)]
-    if len(tmp):
-        return float(sum(tmp) / len(tmp))
-    else:
-        return float('nan')
 
 
 class CompletionTimeEstimator:
@@ -138,7 +131,8 @@ class CompletionTimeEstimator:
 
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
-        self.uncertainty = max(max(estimates) - self.estimate, self.estimate - min(estimates))
+        # self.uncertainty = max(max(estimates) - self.estimate, self.estimate - min(estimates))
+        self.uncertainty = stdev(estimates)
         return self.estimate
 
 
@@ -160,6 +154,12 @@ class RemainingTimeEstimator:
 
         if num_remaining:
             self.update(num_remaining)
+
+    def __str__(self):
+        if self.name is None:
+            return f'RemainingTime<{self.estimate}±{self.CTE.uncertainty}>'
+        else:
+            return f'RemainingTime<[{self.name}]={self.estimate}±{self.CTE.uncertainty}>'
 
     def update(self, num_remaining):
         """
@@ -188,8 +188,13 @@ class RemainingTimeEstimator:
         self.estimate = self.eta - timestamp
         return self.estimate
 
-    def __str__(self):
-        if self.name is None:
-            return f'RemainingTime<{self.estimate}±{self.CTE.uncertainty}>'
-        else:
-            return f'RemainingTime<[{self.name}]={self.estimate}±{self.CTE.uncertainty}>'
+    def get_estimate(self):
+        if math.isnan(self.CTE.uncertainty):
+            return self.estimate
+
+        if self.CTE.uncertainty == 0:
+            return self.estimate
+
+        # take 2 standard deviations and round accordingly
+        uncertainty_exponent = 10 ** math.floor(math.log10(self.CTE.uncertainty * 2))
+        return math.ceil(self.estimate / uncertainty_exponent) * uncertainty_exponent
