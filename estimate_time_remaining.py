@@ -26,7 +26,7 @@ class CompletionTimeEstimator:
         :param timestamp: unix/windows timestamp or time.time()
         :type timestamp: [int, float]
         """
-        self._reset(5, 0.3)
+        self._reset(5, 0.1)
         self.count_history.append((num_remaining, timestamp))
         self.monotonic_history.append((num_remaining, timestamp))
 
