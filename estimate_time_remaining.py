@@ -26,14 +26,16 @@ class CompletionTimeEstimator:
         :param timestamp: unix/windows timestamp or time.time()
         :type timestamp: [int, float]
         """
-        self._reset(5, 0.1)
+        self.reset(5, 0.1)
         self.count_history.append((num_remaining, timestamp))
         self.monotonic_history.append((num_remaining, timestamp))
 
-    def _reset(self, sample_size, smoothing_factor):
+    def reset(self, sample_size=None, smoothing_factor=None):
 
-        self.sample_size = sample_size  # auto-increases if there are many repeated measurements
-        self.smoothing_factor = smoothing_factor  # exponential moving average
+        if sample_size is not None:
+            self.sample_size = sample_size  # auto-increases if there are many repeated measurements
+        if smoothing_factor is not None:
+            self.smoothing_factor = smoothing_factor  # exponential moving average
 
         self.count_history = []
         self.monotonic_history = []
@@ -95,7 +97,7 @@ class CompletionTimeEstimator:
         # item count should not increase
         if num_remaining > last_n:
             warnings.warn('item count increased, it should only decrease (timer will reset)')
-            self._reset(self.sample_size + 1, self.smoothing_factor)
+            self.reset()
             self.count_history.append((num_remaining, timestamp))
             self.monotonic_history.append((num_remaining, timestamp))
             return self.estimate  # float('nan')
@@ -115,6 +117,20 @@ class CompletionTimeEstimator:
                 first_n, first_t = self.monotonic_history[0]
                 last_n, last_t = self.monotonic_history[-1]
                 self._update_rate(((first_n - last_n) / (last_t - first_t), timestamp))
+
+            # check if rate is appropriate given previous info
+            if len(self.monotonic_history) > 2:
+                prev_n, prev_t = self.monotonic_history[-2]
+                expected_n = prev_n - (timestamp - prev_t) * self.rate
+                assert expected_n < prev_n
+
+                # remaining amount is more than 20% off from prediction
+                if abs(num_remaining - expected_n) / expected_n > 0.2:
+                    warnings.warn('significant deviation from expected rate (resetting timer)')
+                    self.reset()
+                    self.count_history.append((num_remaining, timestamp))
+                    self.monotonic_history.append((num_remaining, timestamp))
+                    return self.estimate  # float('nan')
 
         # rate of change could not be estimated
         if math.isnan(self.rate):
@@ -186,6 +202,13 @@ class RemainingTimeEstimator:
 
         # actual remaining time
         self.estimate = self.eta - timestamp
+
+        # uncertainty too high
+        if self.CTE.uncertainty > self.estimate * 2:
+            self.CTE.reset()
+        self.eta = float('nan')
+        self.estimate = float('nan')
+
         return self.estimate
 
     def get_estimate(self):
