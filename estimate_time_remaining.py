@@ -212,6 +212,9 @@ class RemainingTimeEstimator:
         return self.estimate
 
     def get_estimate(self):
+        if math.isnan(self.estimate):
+            return self.estimate
+
         if math.isnan(self.CTE.uncertainty):
             return self.estimate
 
