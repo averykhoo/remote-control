@@ -304,13 +304,13 @@ class RMQ:
                     if queue_name not in _completed:
                         print(f'<{queue_name}> is empty (elapsed {format_seconds(time.time() - _time_start)})')
                         _completed.add(queue_name)
+                        del estimators[queue_name]
                     continue
 
                 # queues that somehow got refilled
                 if queue_name in _completed:
-                    warnings.warn(f'<{queue_name}> unexpectedly refilled! (time estimate will be reset)')
+                    warnings.warn(f'<{queue_name}> unexpectedly refilled!')
                     _completed.remove(queue_name)
-                    del estimators[queue_name]
                     estimators[queue_name] = RemainingTimeEstimator(name=queue_name)
 
                 # update estimator
@@ -325,17 +325,13 @@ class RMQ:
                 if time.time() >= _next_print_time:
 
                     # eta is the worst case estimate
-                    worst_case_estimate = None
+                    furthest_estimate = float('nan')
                     for estimator in estimators.values():
-                        if not math.isnan(estimator.get_estimate()):
-                            if worst_case_estimate is None:
-                                worst_case_estimate = estimator.get_estimate()
-                            else:
-                                worst_case_estimate = max(worst_case_estimate, estimator.get_estimate())
+                        furthest_estimate = max(furthest_estimate, estimator.get_estimate())
 
                     # stuff to print
                     unfinished_queues = sorted(queue_name for queue_name in queue_names if queue_name not in _completed)
-                    eta = '<?>' if worst_case_estimate is None else format_seconds(min(_eta_max, worst_case_estimate))
+                    eta = '<?>' if math.isnan(furthest_estimate) else format_seconds(min(_eta_max, furthest_estimate))
 
                     # print info
                     print(f'waiting for <{",".join(unfinished_queues)}> to be empty... '

@@ -1,5 +1,4 @@
 import time
-import warnings
 from statistics import mean, stdev
 
 import math
@@ -26,11 +25,13 @@ class CompletionTimeEstimator:
         :param timestamp: unix/windows timestamp or time.time()
         :type timestamp: [int, float]
         """
-        self.reset(5, 0.1)
+        self.reset(None, 5, 0.1)
         self.count_history.append((num_remaining, timestamp))
         self.monotonic_history.append((num_remaining, timestamp))
 
-    def reset(self, sample_size=None, smoothing_factor=None):
+    def reset(self, reason, sample_size=None, smoothing_factor=None):
+        if reason is not None:
+            print(f'RESETTING ESTIMATED TIME: {reason}')
 
         if sample_size is not None:
             self.sample_size = sample_size  # auto-increases if there are many repeated measurements
@@ -96,8 +97,7 @@ class CompletionTimeEstimator:
 
         # item count should not increase
         if num_remaining > last_n:
-            warnings.warn('item count increased, it should only decrease (timer will reset)')
-            self.reset()
+            self.reset('item count increased')
             self.count_history.append((num_remaining, timestamp))
             self.monotonic_history.append((num_remaining, timestamp))
             return self.estimate  # float('nan')
@@ -126,8 +126,7 @@ class CompletionTimeEstimator:
 
                 # remaining amount is more than 20% off from prediction
                 if abs(num_remaining - expected_n) / expected_n > 0.2:
-                    warnings.warn('significant deviation from expected rate (resetting timer)')
-                    self.reset()
+                    self.reset('deviation from expected rate')
                     self.count_history.append((num_remaining, timestamp))
                     self.monotonic_history.append((num_remaining, timestamp))
                     return self.estimate  # float('nan')
@@ -147,8 +146,7 @@ class CompletionTimeEstimator:
 
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
-        # self.uncertainty = max(max(estimates) - self.estimate, self.estimate - min(estimates))
-        self.uncertainty = stdev(estimates)
+        self.uncertainty = stdev(estimates)  # max(max(estimates) - self.estimate, self.estimate - min(estimates))
         return self.estimate
 
 
@@ -191,6 +189,10 @@ class RemainingTimeEstimator:
 
         # get estimated time remaining
         completion_estimate = self.CTE.update(num_remaining, timestamp)
+        if math.isnan(completion_estimate):
+            self.eta = float('nan')
+            self.estimate = float('nan')
+            return self.estimate
 
         # moving exponential average for estimate to prevent jumps
         if math.isnan(self.eta):
@@ -204,10 +206,12 @@ class RemainingTimeEstimator:
         self.estimate = self.eta - timestamp
 
         # uncertainty too high
-        if self.CTE.uncertainty > self.estimate * 2:
-            self.CTE.reset()
-        self.eta = float('nan')
-        self.estimate = float('nan')
+        if not math.isnan(self.estimate) and not math.isnan(self.CTE.uncertainty):
+            if self.CTE.uncertainty > self.estimate * 10:
+                print('RESETTING ESTIMATED TIME: uncertainty much greater than estimated time remaining')
+                self.CTE = CompletionTimeEstimator(num_remaining, timestamp)
+                self.eta = float('nan')
+                self.estimate = float('nan')
 
         return self.estimate
 
