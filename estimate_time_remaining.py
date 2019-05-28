@@ -105,7 +105,7 @@ class CompletionTimeEstimator:
         # update sample size
         # self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
         self.sample_size = min(self.sample_size, int(len(self.count_history) / 4))  # last 25% of readings
-        self.sample_size = max(self.sample_size, self._max_sample_size)
+        self.sample_size = max(self._max_sample_size, self.sample_size)
 
         # update monotonic history
         if num_remaining < last_n:
@@ -172,9 +172,9 @@ class RemainingTimeEstimator:
 
     def __str__(self):
         if self.name is None:
-            return f'RemainingTime<{self.estimate}±{self.CTE.uncertainty}>'
+            return f'RemainingTime<{self.get_estimate()}±{self.CTE.uncertainty}>'
         else:
-            return f'RemainingTime<[{self.name}]={self.estimate}±{self.CTE.uncertainty}>'
+            return f'RemainingTime<[{self.name}]={self.get_estimate()}±{self.CTE.uncertainty}>'
 
     def update(self, num_remaining):
         """
@@ -199,7 +199,7 @@ class RemainingTimeEstimator:
         if math.isnan(self.eta):
             self.eta = completion_estimate
         elif self.eta <= timestamp:
-            self.eta = max(completion_estimate, timestamp)
+            self.eta = max(timestamp, completion_estimate)
         else:
             self.eta = self.eta * self.smoothing_factor + completion_estimate * (1 - self.smoothing_factor)
 

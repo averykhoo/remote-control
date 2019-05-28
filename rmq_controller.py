@@ -276,7 +276,7 @@ class RMQ:
 
         if verbose:
             if type(verbose) in (int, float):
-                _print_seconds = max(verbose, _sleep_seconds)
+                _print_seconds = max(_sleep_seconds, verbose)
 
         if isinstance(queue_names, str):
             queue_names = [queue_names]
@@ -327,7 +327,7 @@ class RMQ:
                     # eta is the worst case estimate
                     furthest_estimate = float('nan')
                     for estimator in estimators.values():
-                        furthest_estimate = max(furthest_estimate, estimator.get_estimate())
+                        furthest_estimate = max(estimator.get_estimate(), furthest_estimate)  # put the nan last
 
                     # stuff to print
                     unfinished_queues = sorted(queue_name for queue_name in queue_names if queue_name not in _completed)
