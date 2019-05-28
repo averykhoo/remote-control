@@ -147,7 +147,10 @@ class CompletionTimeEstimator:
 
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
-        self.uncertainty = stdev(estimates)  # max(max(estimates) - self.estimate, self.estimate - min(estimates))
+        if len(estimates) > 1:
+            self.uncertainty = stdev(estimates)  # max(max(estimates) - self.estimate, self.estimate - min(estimates))
+        else:
+            self.uncertainty = 0
         return self.estimate
 
 
