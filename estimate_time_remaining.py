@@ -1,18 +1,12 @@
 import time
-import warnings
+from statistics import mean, stdev
 
 import math
 
 
-def mean(vec):
-    tmp = [elem for elem in vec if elem is not None and not math.isnan(elem)]
-    if len(tmp):
-        return float(sum(tmp) / len(tmp))
-    else:
-        return float('nan')
-
-
 class CompletionTimeEstimator:
+    _max_sample_size = 3000  # about 4hrs of 5-second samples
+
     sample_size: int
     smoothing_factor: float
 
@@ -31,14 +25,18 @@ class CompletionTimeEstimator:
         :param timestamp: unix/windows timestamp or time.time()
         :type timestamp: [int, float]
         """
-        self._reset(5, 0.5)
+        self.reset(None, 5, 0.1)
         self.count_history.append((num_remaining, timestamp))
         self.monotonic_history.append((num_remaining, timestamp))
 
-    def _reset(self, sample_size, smoothing_factor):
+    def reset(self, reason, sample_size=None, smoothing_factor=None):
+        if reason is not None:
+            print(f'RESETTING ESTIMATED TIME: {reason}')
 
-        self.sample_size = sample_size  # auto-increases if there are many repeated measurements
-        self.smoothing_factor = smoothing_factor  # exponential moving average
+        if sample_size is not None:
+            self.sample_size = sample_size  # auto-increases if there are many repeated measurements
+        if smoothing_factor is not None:
+            self.smoothing_factor = smoothing_factor  # exponential moving average
 
         self.count_history = []
         self.monotonic_history = []
@@ -48,10 +46,9 @@ class CompletionTimeEstimator:
         self.estimate = float('nan')
         self.uncertainty = float('nan')
 
-    def _update_rate(self):
-        if not self.rate_history:
-            self.rate = float('nan')
-            return self.rate
+    def _update_rate(self, instantaneous_rate):
+        self.rate_history.append(instantaneous_rate)
+        self.rate_history = self.rate_history[-(self.sample_size + 1):]  # housekeeping
 
         # just use mean rate if less than 5 sample rates
         if len(self.rate_history) < 5:
@@ -60,13 +57,13 @@ class CompletionTimeEstimator:
         # use weighted average by duration
         else:
             # total duration
-            t0 = self.rate_history[-(self.sample_size + 1):][0][-1]
+            t0 = self.rate_history[0][-1]
             rate_window_len = self.rate_history[-1][-1] - t0
             assert rate_window_len > 0
 
             # weighted average
             weighted_rates = []
-            for rate, t in self.rate_history[-(self.sample_size + 1):][1:]:
+            for rate, t in self.rate_history[1:]:
                 weighted_rates.append(rate * (t - t0) / rate_window_len)
                 t0 = t
             new_rate = sum(weighted_rates)
@@ -96,32 +93,48 @@ class CompletionTimeEstimator:
 
         # update history
         self.count_history.append((num_remaining, timestamp))
+        self.count_history = self.count_history[-(self._max_sample_size * 4 + 1):]  # 400% of max_sample_size
 
         # item count should not increase
         if num_remaining > last_n:
-            warnings.warn('item count increased, it should only decrease (timer will reset)')
-            self._reset(self.sample_size + 1, self.smoothing_factor)
+            self.reset('item count increased')
+            self.count_history.append((num_remaining, timestamp))
+            self.monotonic_history.append((num_remaining, timestamp))
+            return self.estimate  # float('nan')
 
         # update sample size
         # self.sample_size = min(self.sample_size, 2 * sum(n == num_remaining for n, t in self.count_history))
         self.sample_size = min(self.sample_size, int(len(self.count_history) / 4))  # last 25% of readings
-        self.sample_size = max(self.sample_size, 3000)  # about a day of 30-second samples
+        self.sample_size = max(self.sample_size, self._max_sample_size)
 
         # update monotonic history
         if num_remaining < last_n:
             self.monotonic_history.append((num_remaining, timestamp))
+            self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]  # housekeeping
 
             # recalculate rate
             if len(self.monotonic_history) > 1:
-                first_n, first_t = self.monotonic_history[-(self.sample_size + 1):][0]
+                first_n, first_t = self.monotonic_history[0]
                 last_n, last_t = self.monotonic_history[-1]
-                self.rate_history.append(((first_n - last_n) / (last_t - first_t), timestamp))
-                self._update_rate()
+                self._update_rate(((first_n - last_n) / (last_t - first_t), timestamp))
+
+            # check if rate is appropriate given previous info
+            if len(self.monotonic_history) > 2:
+                prev_n, prev_t = self.monotonic_history[-2]
+                expected_n = prev_n - (timestamp - prev_t) * self.rate
+                assert expected_n < prev_n
+
+                # remaining amount is more than 20% off from prediction
+                if expected_n > 10:
+                    if abs(num_remaining - expected_n) / expected_n > 0.2:
+                        self.reset('significant deviation from expected rate')
+                        self.count_history.append((num_remaining, timestamp))
+                        self.monotonic_history.append((num_remaining, timestamp))
+                        return self.estimate  # float('nan')
 
         # rate of change could not be estimated
         if math.isnan(self.rate):
-            self.estimate = float('nan')
-            return self.estimate
+            return self.estimate  # float('nan')
 
         # given the rate, what are the expected end times for past historical counts
         estimates = []
@@ -132,14 +145,9 @@ class CompletionTimeEstimator:
         if num_remaining > 0 and any(e > timestamp for e in estimates):
             estimates = [e for e in estimates if e > timestamp]
 
-        # # housekeeping
-        # # self.count_history = self.count_history[-(self.sample_size + 1):]  # needed for sample size update
-        # self.monotonic_history = self.monotonic_history[-(self.sample_size + 1):]
-        # self.rate_history = self.rate_history[-(self.sample_size + 1):]
-
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
-        self.uncertainty = max(max(estimates) - self.estimate, self.estimate - min(estimates))
+        self.uncertainty = stdev(estimates)  # max(max(estimates) - self.estimate, self.estimate - min(estimates))
         return self.estimate
 
 
@@ -162,6 +170,12 @@ class RemainingTimeEstimator:
         if num_remaining:
             self.update(num_remaining)
 
+    def __str__(self):
+        if self.name is None:
+            return f'RemainingTime<{self.estimate}±{self.CTE.uncertainty}>'
+        else:
+            return f'RemainingTime<[{self.name}]={self.estimate}±{self.CTE.uncertainty}>'
+
     def update(self, num_remaining):
         """
         :type num_remaining: int
@@ -176,6 +190,10 @@ class RemainingTimeEstimator:
 
         # get estimated time remaining
         completion_estimate = self.CTE.update(num_remaining, timestamp)
+        if math.isnan(completion_estimate):
+            self.eta = float('nan')
+            self.estimate = float('nan')
+            return self.estimate
 
         # moving exponential average for estimate to prevent jumps
         if math.isnan(self.eta):
@@ -187,10 +205,87 @@ class RemainingTimeEstimator:
 
         # actual remaining time
         self.estimate = self.eta - timestamp
-        return self.estimate
 
-    def __str__(self):
-        if self.name is None:
-            return f'RemainingTime<{self.estimate}±{self.CTE.uncertainty}>'
-        else:
-            return f'RemainingTime<[{self.name}]={self.estimate}±{self.CTE.uncertainty}>'
+        # uncertainty too high
+        if not math.isnan(self.estimate) and not math.isnan(self.CTE.uncertainty):
+            if self.CTE.uncertainty > self.estimate * 10:
+                print('RESETTING ESTIMATED TIME: uncertainty much greater than estimated time remaining')
+                self.CTE = CompletionTimeEstimator(num_remaining, timestamp)
+                self.eta = float('nan')
+                self.estimate = float('nan')
+
+        return self.get_estimate()  # self.estimate
+
+    def get_estimate(self):
+        if math.isnan(self.estimate):
+            return self.estimate
+
+        if math.isnan(self.CTE.uncertainty):
+            return self.estimate
+
+        if self.CTE.uncertainty == 0:
+            return self.estimate
+
+        # take 2 standard deviations and round accordingly
+        uncertainty_exponent = 10 ** math.floor(math.log10(self.CTE.uncertainty * 2))
+        return math.ceil(self.estimate / uncertainty_exponent) * uncertainty_exponent
+
+
+if __name__ == '__main__':
+    a = RemainingTimeEstimator(100)
+
+    time.sleep(0.1)
+    print(a.update(100))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(98))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(97))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(97))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(97))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(94))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(95))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(94))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(93))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(93))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(91))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(90))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(90))
+    print(a.get_estimate())
+
+    time.sleep(0.1)
+    print(a.update(88))
+    print(a.get_estimate())
