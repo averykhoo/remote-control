@@ -304,13 +304,13 @@ class RMQ:
                     if queue_name not in _completed:
                         print(f'<{queue_name}> is empty (elapsed {format_seconds(time.time() - _time_start)})')
                         _completed.add(queue_name)
+                        del estimators[queue_name]
                     continue
 
                 # queues that somehow got refilled
                 if queue_name in _completed:
-                    warnings.warn(f'<{queue_name}> unexpectedly refilled! (time estimate will be reset)')
+                    warnings.warn(f'<{queue_name}> unexpectedly refilled!')
                     _completed.remove(queue_name)
-                    del estimators[queue_name]
                     estimators[queue_name] = RemainingTimeEstimator(name=queue_name)
 
                 # update estimator
