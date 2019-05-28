@@ -125,7 +125,7 @@ class CompletionTimeEstimator:
                 assert expected_n < prev_n
 
                 # remaining amount is more than 20% off from prediction
-                if expected_n > 10:
+                if expected_n > 10 and len(self.rate_history) > 10:
                     if abs(num_remaining - expected_n) / expected_n > 0.2:
                         self.reset('significant deviation from expected rate')
                         self.count_history.append((num_remaining, timestamp))
