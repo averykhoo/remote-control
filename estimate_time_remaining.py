@@ -18,16 +18,8 @@ class CompletionTimeEstimator:
     estimate: float
     uncertainty: float
 
-    def __init__(self, num_remaining, timestamp):
-        """
-        :param num_remaining: number of items left to process
-        :type num_remaining: int
-        :param timestamp: unix/windows timestamp or time.time()
-        :type timestamp: [int, float]
-        """
+    def __init__(self):
         self.reset(None, 5, 0.1)
-        self.count_history.append((num_remaining, timestamp))
-        self.monotonic_history.append((num_remaining, timestamp))
 
     def reset(self, reason, sample_size=None, smoothing_factor=None):
         if reason is not None:
@@ -85,6 +77,12 @@ class CompletionTimeEstimator:
         :param timestamp: unix/windows timestamp or time.time()
         :type timestamp: [int, float]
         """
+
+        if len(self.monotonic_history) == 0:
+            assert len(self.count_history) == 0
+            self.count_history.append((num_remaining, timestamp))
+            self.monotonic_history.append((num_remaining, timestamp))
+            return self.estimate
 
         # calculate delta from last update
         last_n, _ = self.monotonic_history[-1]
@@ -148,7 +146,8 @@ class CompletionTimeEstimator:
         # update and return estimated completion time (as timestamp)
         self.estimate = mean(estimates)
         if len(estimates) > 1:
-            self.uncertainty = stdev(estimates)  # max(max(estimates) - self.estimate, self.estimate - min(estimates))
+            # self.uncertainty_stdev = max(max(estimates) - self.estimate, self.estimate - min(estimates))
+            self.uncertainty = stdev(estimates) * 2  # 2 standard deviations = 95%
         else:
             self.uncertainty = 0
         return self.estimate
@@ -158,7 +157,7 @@ class RemainingTimeEstimator:
     eta: float
     estimate: float
 
-    def __init__(self, num_remaining=None, name=None):
+    def __init__(self, name=None):
         """
         :type num_remaining: [int, None]
         :type name: [str, None]
@@ -170,14 +169,15 @@ class RemainingTimeEstimator:
         self.name = name
         self.smoothing_factor = 0.1
 
-        if num_remaining:
-            self.update(num_remaining)
-
     def __str__(self):
+        # 2 significant figures of uncertainty
+        # noinspection PyStringFormat
+        unc_str = f'{{N:,.{1 - int(math.floor(math.log10(self.CTE.uncertainty)))}f}}'.format(N=self.CTE.uncertainty)
+
         if self.name is None:
-            return f'RemainingTime<{self.get_estimate()}±{self.CTE.uncertainty}>'
+            return f'RemainingTime<{self.get_estimate()}±{unc_str}>'
         else:
-            return f'RemainingTime<[{self.name}]={self.get_estimate()}±{self.CTE.uncertainty}>'
+            return f'RemainingTime<[{self.name}]={self.get_estimate()}±{unc_str}>'
 
     def update(self, num_remaining):
         """
@@ -187,7 +187,8 @@ class RemainingTimeEstimator:
 
         # create new completion time estimator
         if self.CTE is None:
-            self.CTE = CompletionTimeEstimator(num_remaining, timestamp)
+            self.CTE = CompletionTimeEstimator()
+            self.CTE.update(num_remaining, timestamp)
             self.estimate = float('nan')
             return self.estimate
 
@@ -210,14 +211,15 @@ class RemainingTimeEstimator:
         self.estimate = self.eta - timestamp
 
         # uncertainty too high
-        if not math.isnan(self.estimate) and not math.isnan(self.CTE.uncertainty):
-            if self.CTE.uncertainty > self.estimate * 10:
-                print('RESETTING ESTIMATED TIME: uncertainty much greater than estimated time remaining')
-                self.CTE = CompletionTimeEstimator(num_remaining, timestamp)
-                self.eta = float('nan')
-                self.estimate = float('nan')
+        if self.CTE.uncertainty * 0.1 > self.estimate > 10:  # if either is nan, evaluates to False
+            print('RESETTING ESTIMATED TIME: uncertainty much greater than estimated time remaining')
+            print(f'estimate: {self.estimate}, uncertainty: {self.CTE.uncertainty}')
+            self.CTE = CompletionTimeEstimator()
+            self.CTE.update(num_remaining, timestamp)
+            self.eta = float('nan')
+            self.estimate = float('nan')
 
-        return self.get_estimate()  # self.estimate
+        return self.get_estimate()
 
     def get_estimate(self):
         if math.isnan(self.estimate):
@@ -230,7 +232,8 @@ class RemainingTimeEstimator:
             return self.estimate
 
         # take 2 standard deviations and round accordingly
-        uncertainty_exponent = 10 ** math.floor(math.log10(self.CTE.uncertainty * 2))
+        assert self.CTE.uncertainty > 0
+        uncertainty_exponent = 10 ** math.floor(math.log10(self.CTE.uncertainty))
         return math.ceil(self.estimate / uncertainty_exponent) * uncertainty_exponent
 
 

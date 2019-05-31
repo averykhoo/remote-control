@@ -121,15 +121,18 @@ class SSH:
         # return output
         return out
 
-    def kill(self, pid: int):
-        pid = int(pid)
-        assert pid > 10  # don't kill the kernel pls
+    def kill(self, pids):
+        if type(pids) is not list:
+            pids = [pids]
+
+        pids = [int(pid) for pid in pids]
+        assert all(pid > 10 for pid in pids)  # don't kill the kernel pls
 
         self._log({'function': 'kill',
-                   'pid':      pid,
+                   'pid':      pids,
                    })
 
-        self.execute(f'kill -9 {pid}')
+        self.execute(f'kill -9 {" ".join(map(str, pids))}')
 
     def ps_ef(self, cmd_grep_patterns=None, kill=False):
         headers = ['User', 'PID', 'Parent PID', 'CPU%', 'Start Time', 'TTY', 'Running Time', 'Command']
