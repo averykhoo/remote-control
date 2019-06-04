@@ -46,8 +46,11 @@ class SSH:
         self.log_separator = '--'  # compatible with jdump files
 
         try:
-            with SSHConnection(self.ip_address, self.port, self.username, self.password, timeout=30):
-                pass
+            with SSHConnection(self.ip_address, self.port, self.username, self.password, timeout=30) as ssh_conn:
+                stdin, stdout, stderr = ssh_conn.exec_command('echo 123')
+                out = stdout.read()
+                assert out.strip().decode('ascii') == '123', out
+
         except Exception:
             print('SSH connection test failed')
             raise
