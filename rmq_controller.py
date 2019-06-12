@@ -87,7 +87,6 @@ class RChannel:
     def __enter__(self):
         self.rmq_conn = pika.BlockingConnection(parameters=self.parameters)
         self.rmq_channel = self.rmq_conn.channel()
-        self.rmq_channel.basic_qos(prefetch_count=1)
         return self.rmq_channel
 
     def __exit__(self, exc_type, exc_val, exc_tb):
