@@ -100,7 +100,7 @@ class RChannel:
 
 
 class RMQ:
-    def __init__(self, ip_address, port, virtual_host, username, password, logfile='rmq.log', name=None):
+    def __init__(self, ip_address, port, virtual_host, username, password, name=None, logfile='rmq.log'):
         self.ip_address = ip_address
         self.port = port
         self.virtual_host = virtual_host

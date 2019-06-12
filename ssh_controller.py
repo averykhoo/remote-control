@@ -36,7 +36,7 @@ class SSHConnection:
 
 
 class SSH:
-    def __init__(self, ip_address, port, username, password, logfile='ssh.log', name=None):
+    def __init__(self, ip_address, port, username, password, name=None, logfile='ssh.log'):
         self.ip_address = ip_address
         self.port = port
         self.username = username
