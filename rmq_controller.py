@@ -219,33 +219,34 @@ class RMQ:
                    })
 
         # start reading
-        with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
-            for method_frame, header_frame, body in rmq_channel.consume(queue=queue_name,
-                                                                        inactivity_timeout=timeout_seconds):
-                # finished reading messages
-                if _num_to_read == 0:
-                    break
+        if _num_to_read > 0:
+            with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
+                for method_frame, header_frame, body in rmq_channel.consume(queue=queue_name,
+                                                                            inactivity_timeout=timeout_seconds):
+                    # finished reading messages
+                    if _num_to_read == 0:
+                        break
 
-                # rabbit mq way of saying there's nothing left (after timeout_seconds of the queue being empty)
-                if body is None:
-                    continue
+                    # rabbit mq way of saying there's nothing left (after timeout_seconds of the queue being empty)
+                    if body is None:
+                        continue
 
-                # decode to utf8
-                if type(body) is bytes:
-                    body = body.decode('utf8')
+                    # decode to utf8
+                    if type(body) is bytes:
+                        body = body.decode('utf8')
 
-                # json decode
-                yield json.loads(body)
+                    # json decode
+                    yield json.loads(body)
 
-                # ack message
-                if auto_ack and method_frame:
-                    rmq_channel.basic_ack(method_frame.delivery_tag)
+                    # ack message
+                    if auto_ack and method_frame:
+                        rmq_channel.basic_ack(method_frame.delivery_tag)
 
-                # count down until n==0
-                _num_to_read -= 1
+                    # count down until n==0
+                    _num_to_read -= 1
 
-            # re-queue unacked messages, if any
-            rmq_channel.cancel()
+                # re-queue unacked messages, if any
+                rmq_channel.cancel()
 
     def write_jsons(self, queue_name, json_iterator):
 
