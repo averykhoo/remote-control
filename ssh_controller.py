@@ -213,9 +213,19 @@ class SSH:
                    'remote_path': remote_path,
                    })
 
-        if self.execute(f'ls -l {remote_path}').rstrip('\r\n'):
-            return True
-        return False
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter("always")
+
+            if self.execute(f'ls -l {remote_path}').rstrip('\r\n'):
+                path_exists = True
+            else:
+                path_exists = False  # UserWarning will have been raised
+
+            for warning in caught_warnings:
+                if path_exists or warning.category != UserWarning:
+                    warnings.warn(warning)
+
+        return path_exists
 
     def mkdir(self, remote_path, parents=True):
         remote_path = str(remote_path)
