@@ -137,7 +137,7 @@ class SSH:
 
         self.execute(f'kill -9 {" ".join(map(str, pids))}')
 
-    def ps_ef(self, cmd_grep_patterns=None, kill=False):
+    def ps_ef(self, cmd_grep_patterns=None, kill=False, grep_case=True):
         headers = ['User', 'PID', 'Parent PID', 'CPU%', 'Start Time', 'TTY', 'Running Time', 'Command']
 
         if cmd_grep_patterns is None:
@@ -158,7 +158,7 @@ class SSH:
 
         # filter to desired rows
         for pattern in cmd_grep_patterns:
-            df = df[df['Command'].str.contains(pattern)]
+            df = df[df['Command'].str.contains(pattern, case=grep_case)]
 
         # nothing to kill
         if not kill:
@@ -179,31 +179,18 @@ class SSH:
 
         # kill the things
         for i, pid in enumerate(pids_to_kill):
-            print(f'[{i + 1}/{len(pids_to_kill)}] killing process with PID={pid}')
+            if self.name is None:
+                print(f'[{i + 1}/{len(pids_to_kill)}] killing process with PID={pid}')
+            else:
+                print(f'[{i + 1}/{len(pids_to_kill)}] killing process with PID={pid} on {self.name}')
             self.kill(pid)
 
         # done
         return df
 
-    def process_running(self, process_name, cmd_grep_patterns, grep_case=True):
-        if cmd_grep_patterns is None:
-            cmd_grep_patterns = []
-        elif type(cmd_grep_patterns) is str:
-            cmd_grep_patterns = [cmd_grep_patterns]
-
-        self._log({'function':          'process_running',
-                   'remote_path':       process_name,
-                   'cmd_grep_patterns': cmd_grep_patterns,
-                   })
-
-        cmd = 'ps -ef'
-        for pattern in cmd_grep_patterns:
-            if grep_case:
-                cmd += f' | grep "{pattern}"'
-            else:
-                cmd += f' | grep -i "{pattern}"'
-
-        return process_name in self.execute(cmd)
+    def process_running(self, cmd_grep_patterns, grep_case=True):
+        rows, cols = self.ps_ef(cmd_grep_patterns, grep_case=grep_case).shape
+        return rows or False
 
     def exists(self, remote_path):
         remote_path = str(remote_path)
