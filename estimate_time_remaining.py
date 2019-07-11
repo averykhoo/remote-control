@@ -210,8 +210,8 @@ class RemainingTimeEstimator:
         # actual remaining time
         self.estimate = self.eta - timestamp
 
-        # uncertainty too high
-        if self.CTE.uncertainty * 0.1 > self.estimate > 10:  # if either is nan, evaluates to False
+        # uncertainty too high and estimate more than 10 mins
+        if self.CTE.uncertainty * 0.1 > self.estimate > 600:  # if either is nan, evaluates to False
             if len(self.CTE.rate_history) > 10:
                 print('RESETTING ESTIMATED TIME: uncertainty much greater than estimated time remaining')
                 print(f'estimate: {self.estimate}, uncertainty: {self.CTE.uncertainty}')
