@@ -2,7 +2,8 @@ import datetime
 import json
 import time
 import warnings
-from typing import Union, Iterable
+from typing import Iterable
+from typing import Union
 
 import math
 import pika
@@ -106,6 +107,7 @@ class RMQ:
         self.virtual_host = virtual_host
         self.username = username
         self.password = password
+        self.exchange = 'amq.default'
         self.logfile = logfile
         self.name = name
         self.log_separator = '--'  # compatible with jdump files
@@ -257,7 +259,7 @@ class RMQ:
         n_inserted = 0
         with RChannel(self.ip_address, self.port, self.virtual_host, self.username, self.password) as rmq_channel:
             for json_obj in json_iterator:
-                rmq_channel.basic_publish(exchange='',
+                rmq_channel.basic_publish(exchange=self.exchange,
                                           routing_key=queue_name,
                                           body=json.dumps(json_obj,
                                                           ensure_ascii=False,
