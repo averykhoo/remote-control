@@ -14,7 +14,7 @@ class RMQ:
         self.exchange = 'amq.default'
 
     def _api_get(self, api_path):
-        assert api_path.startswith('/')
+        assert api_path.startswith('/api/')
 
         r = requests.get(f'http://{self.host}:{self.port}/{api_path[1:]}',
                          auth=HTTPBasicAuth(self.username, self.password))
@@ -36,10 +36,7 @@ class RMQ:
     def queue_insert(self, json_obj, queue_name):
         payload = {'properties':       {},
                    'routing_key':      queue_name,
-                   # 'delivery_mode':    1,  # non-persistent (1) or persistent (2)
-                   # 'headers':          {},
-                   # 'props':            {},
                    'payload':          json.dumps(json_obj, ensure_ascii=False),
                    'payload_encoding': 'string',
                    }
-        self._api_post(f'/api/exchanges/{self.virtual_host}/{self.exchange}/publish', payload)
+        return self._api_post(f'/api/exchanges/{self.virtual_host}/{self.exchange}/publish', payload)
