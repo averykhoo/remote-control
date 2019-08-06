@@ -5,19 +5,26 @@ import requests
 from requests.auth import HTTPBasicAuth
 
 
-class RMQ:
-    def __init__(self, ip_address, port, virtual_host, username, password):
-        self.host = ip_address,
+class RMQAdmin:
+    def __init__(self, ip_address, port, virtual_host, username, password, name=None):
+        self.ip_address = ip_address,
         self.port = port,
         self.virtual_host = virtual_host,
         self.username = username
         self.password = password
         self.exchange = 'amq.default'
+        self.name = name
+
+    def __str__(self):
+        if self.name is None:
+            return f'RMQadmin<{self.username}@{self.ip_address}:{self.port}/{self.virtual_host}>'
+        else:
+            return f'RMQadmin<[{self.name}]={self.username}@{self.ip_address}:{self.port}/{self.virtual_host}>'
 
     def _api_get(self, api_path):
         assert api_path.startswith('/api/')
 
-        r = requests.get(f'http://{self.host}:{self.port}/{api_path[1:]}',
+        r = requests.get(f'http://{self.ip_address}:{self.port}/{api_path[1:]}',
                          auth=HTTPBasicAuth(self.username, self.password))
 
         return r.json()
@@ -25,7 +32,7 @@ class RMQ:
     def _api_post(self, api_path, post_json_payload):
         assert api_path.startswith('/api/')
 
-        r = requests.get(f'http://{self.host}:{self.port}/{api_path[1:]}',
+        r = requests.get(f'http://{self.ip_address}:{self.port}/{api_path[1:]}',
                          auth=HTTPBasicAuth(self.username, self.password),
                          json=post_json_payload)
 
